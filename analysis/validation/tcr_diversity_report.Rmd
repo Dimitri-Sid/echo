@@ -1,0 +1,594 @@
+---
+title: "TCR Diversity Validation Report"
+subtitle: "NanoString-style TRBV Proxy vs True Clonotype Diversity — Blum, Lechner & Luoma Datasets"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    self_contained: true
+    code_folding: hide
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE,
+  warning    = FALSE,
+  message    = FALSE,
+  fig.width  = 10,
+  fig.height = 6,
+  dpi        = 150,
+  out.width  = "100%"
+)
+```
+
+```{r libs, include=FALSE}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(purrr)
+  library(stringr)
+  library(ggplot2)
+  library(ggrepel)
+  library(scales)
+  library(data.table)
+  library(RColorBrewer)
+  library(patchwork)
+  library(pheatmap)
+  library(plotly)
+  library(DT)
+  library(knitr)
+  library(kableExtra)
+})
+
+# Source functions from repo root
+REPO_ROOT <- here::here()
+source(file.path(REPO_ROOT, "R", "tcr_diversity_functions.R"))
+
+VAL_DIR  <- file.path(REPO_ROOT, "validation")
+MIN_CELLS    <- 30
+DOWNSAMPLE_N <- 200
+
+DATASET_COLORS <- c(
+  "blum"    = "#2166AC",
+  "lechner" = "#D6604D",
+  "luoma"   = "#4DAF4A"
+)
+```
+
+```{r load-helpers, include=FALSE}
+# ── h5ad loading ──────────────────────────────────────────────────────────────
+load_h5ad_metadata <- function(path) {
+  if (requireNamespace("zellkonverter", quietly = TRUE)) {
+    sce  <- zellkonverter::readH5AD(path, X = FALSE, use_hdf5 = FALSE)
+    meta <- as.data.frame(SingleCellExperiment::colData(sce))
+    return(tibble::rownames_to_column(meta, "barcode_aggr"))
+  }
+  if (requireNamespace("anndata", quietly = TRUE)) {
+    ad   <- anndata::read_h5ad(path)
+    meta <- as.data.frame(ad$obs)
+    return(tibble::rownames_to_column(meta, "barcode_aggr"))
+  }
+  stop("Install zellkonverter (BiocManager) or anndata (CRAN) to load .h5ad files.")
+}
+
+`%||%` <- function(a, b) if (!is.null(a)) a else b
+
+.TRBV_PATTERNS  <- c("^v_gene$","^trbv$","^trbv_gene$","^v_gene_beta$",
+                      "IR_VDJ_1_v_call","^TCR_Beta_V_gene$","^beta_v_gene$",
+                      "^vb_gene$","^TRBV_gene$","v_call")
+.CLONO_PATTERNS <- c("^clonotype_id$","^clone_id$","^cloneid$",
+                      "^cdr3_beta$","^cdr3_b_aa$","^IR_obs_vj_1_junction_aa$",
+                      "^TCR_clonotype$","^clonotype$","^clone$",
+                      "^raw_clonotype_id$","^ct_id$")
+.SAMPLE_PATTERNS <- c("^sample_id$","^sample$","^donor$","^patient$",
+                       "^patient_id$","^donor_id$","^orig.ident$",
+                       "^batch$","^library_id$")
+
+.find_col <- function(nms, pats) {
+  for (p in pats) { h <- grep(p, nms, ignore.case=TRUE, value=TRUE); if (length(h)) return(h[1]) }
+  NULL
+}
+
+normalise_tcr_metadata <- function(meta, dataset_id,
+                                    trbv_col=NULL, clono_col=NULL, sample_col=NULL) {
+  cols <- colnames(meta)
+  trbv_col   <- trbv_col   %||% .find_col(cols, .TRBV_PATTERNS)
+  clono_col  <- clono_col  %||% .find_col(cols, .CLONO_PATTERNS)
+  sample_col <- sample_col %||% .find_col(cols, .SAMPLE_PATTERNS)
+
+  if (!is.null(trbv_col)   && trbv_col   != "trbv_gene")
+    meta <- meta %>% rename(trbv_gene    = all_of(trbv_col))
+  if (!is.null(clono_col)  && clono_col  != "clonotype_id")
+    meta <- meta %>% rename(clonotype_id = all_of(clono_col))
+  if (!is.null(sample_col) && sample_col != "sample_id")
+    meta <- meta %>% rename(sample_id    = all_of(sample_col))
+  else if (is.null(sample_col))
+    meta$sample_id <- dataset_id
+
+  if (!"trbv_gene"    %in% colnames(meta)) meta$trbv_gene    <- NA_character_
+  if (!"clonotype_id" %in% colnames(meta)) meta$clonotype_id <- NA_character_
+  meta$dataset <- dataset_id
+
+  attr(meta, "col_map") <- list(trbv=trbv_col, clono=clono_col, sample=sample_col)
+  meta
+}
+
+load_and_prep <- function(fname, dataset_id, ...) {
+  path <- file.path(VAL_DIR, fname)
+  raw  <- load_h5ad_metadata(path)
+  normalise_tcr_metadata(raw, dataset_id, ...)
+}
+```
+
+```{r load-data, cache=TRUE, include=FALSE}
+blum_meta    <- load_and_prep("blum_combined_tissue_data.h5ad",                      "blum")
+lechner_meta <- load_and_prep("lechner_thyroiditis_tissue_cd8_seurat_object.h5ad",   "lechner")
+luoma_meta   <- load_and_prep("luoma_colitis_cd8_seurat_object.h5ad",                "luoma")
+
+all_datasets <- list(blum = blum_meta, lechner = lechner_meta, luoma = luoma_meta)
+```
+
+```{r run-analysis, cache=TRUE, include=FALSE}
+run_ds <- function(meta, gv = "sample_id") {
+  run_tcr_diversity_analysis(meta, group_vars=gv,
+                              min_cells=MIN_CELLS, downsample_n=DOWNSAMPLE_N)
+}
+
+blum_res    <- run_ds(blum_meta)
+lechner_res <- run_ds(lechner_meta)
+luoma_res   <- run_ds(luoma_meta)
+
+results_list <- list(blum = blum_res, lechner = lechner_res, luoma = luoma_res)
+```
+
+---
+
+## Overview
+
+This report validates the **NanoString-style TRBV usage diversity proxy** against true CDR3-level clonotype diversity across three published single-cell TCR sequencing datasets.
+
+> **Important:** The TRBV-based metric measures V-gene usage breadth/evenness. It **cannot** resolve CDR3 clonotypes, antigen specificity, or clonal expansion within a TRBV family. It is labelled throughout as *TRBV usage diversity proxy*, not *true TCR diversity*.
+
+| Dataset | Description | Tissue | T cell subset |
+|---------|-------------|--------|----------------|
+| **Blum** | Blum et al. — combined tissue | Multiple | Mixed |
+| **Lechner** | Lechner et al. — thyroiditis | Thyroid | CD8 |
+| **Luoma** | Luoma et al. — colitis | Gut | CD8 |
+
+---
+
+## 1  Dataset Summaries {.tabset}
+
+```{r coverage-fn, include=FALSE}
+coverage_table <- function(meta, dataset_id) {
+  n   <- nrow(meta)
+  cm  <- attr(meta, "col_map")
+  tibble(
+    Metric  = c("Total cells", "Cells with TRBV gene", "Cells with clonotype ID",
+                "Unique samples", "Unique TRBV genes", "Unique clonotypes",
+                "Detected TRBV column", "Detected clonotype column", "Detected sample column"),
+    Value   = c(
+      scales::comma(n),
+      paste0(scales::comma(sum(!is.na(meta$trbv_gene) & meta$trbv_gene != "")),
+             sprintf(" (%.1f%%)", 100*mean(!is.na(meta$trbv_gene) & meta$trbv_gene != ""))),
+      paste0(scales::comma(sum(!is.na(meta$clonotype_id) & meta$clonotype_id != "")),
+             sprintf(" (%.1f%%)", 100*mean(!is.na(meta$clonotype_id) & meta$clonotype_id != ""))),
+      as.character(n_distinct(meta$sample_id)),
+      as.character(n_distinct(meta$trbv_gene, na.rm=TRUE)),
+      as.character(n_distinct(meta$clonotype_id, na.rm=TRUE)),
+      cm$trbv   %||% "not detected",
+      cm$clono  %||% "not detected",
+      cm$sample %||% paste0("none — used '", dataset_id, "'")
+    )
+  )
+}
+```
+
+### Blum
+```{r blum-coverage}
+coverage_table(blum_meta, "blum") %>%
+  kable(col.names = c("Metric", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE)
+```
+
+### Lechner
+```{r lechner-coverage}
+coverage_table(lechner_meta, "lechner") %>%
+  kable(col.names = c("Metric", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE)
+```
+
+### Luoma
+```{r luoma-coverage}
+coverage_table(luoma_meta, "luoma") %>%
+  kable(col.names = c("Metric", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE)
+```
+
+---
+
+## 2  Diversity Metric Tables {.tabset}
+
+Columns: `H_TRBV` = Shannon diversity of TRBV gene usage; `H_clonotype` = Shannon diversity of CDR3 clonotypes; `true_clonality` = 1 − normalised Shannon (high = oligoclonal).
+
+```{r summary-tables, include=FALSE}
+make_summary <- function(res) build_summary_table(res$comparison)
+blum_tbl    <- make_summary(blum_res)
+lechner_tbl <- make_summary(lechner_res)
+luoma_tbl   <- make_summary(luoma_res)
+```
+
+### Blum
+```{r blum-tbl}
+datatable(blum_tbl, rownames=FALSE, filter="top",
+          options=list(pageLength=10, scrollX=TRUE),
+          caption="Blum — per-sample TRBV proxy and true clonotype diversity") %>%
+  formatRound(where(is.numeric, blum_tbl), digits=4)
+```
+
+### Lechner
+```{r lechner-tbl}
+datatable(lechner_tbl, rownames=FALSE, filter="top",
+          options=list(pageLength=10, scrollX=TRUE),
+          caption="Lechner — per-sample TRBV proxy and true clonotype diversity") %>%
+  formatRound(where(is.numeric, lechner_tbl), digits=4)
+```
+
+### Luoma
+```{r luoma-tbl}
+datatable(luoma_tbl, rownames=FALSE, filter="top",
+          options=list(pageLength=10, scrollX=TRUE),
+          caption="Luoma — per-sample TRBV proxy and true clonotype diversity") %>%
+  formatRound(where(is.numeric, luoma_tbl), digits=4)
+```
+
+---
+
+## 3  TRBV Gene Usage {.tabset}
+
+Stacked barplots of the top 20 TRBV genes per sample. Each bar = one sample; colours = TRBV gene families.
+
+### Blum
+```{r blum-bar, fig.height=6}
+plot_trbv_stacked_bar(blum_meta, group_var="sample_id", top_n_genes=20)
+```
+
+### Lechner
+```{r lechner-bar, fig.height=6}
+plot_trbv_stacked_bar(lechner_meta, group_var="sample_id", top_n_genes=20)
+```
+
+### Luoma
+```{r luoma-bar, fig.height=6}
+plot_trbv_stacked_bar(luoma_meta, group_var="sample_id", top_n_genes=20)
+```
+
+---
+
+## 4  TRBV Gene Usage Heatmaps {.tabset}
+
+Proportion of cells per sample assigned to each of the top 25 TRBV genes. Rows and columns are hierarchically clustered.
+
+### Blum
+```{r blum-heat, fig.height=7}
+plot_trbv_heatmap(blum_meta, group_var="sample_id", top_n_genes=25)
+```
+
+### Lechner
+```{r lechner-heat, fig.height=7}
+plot_trbv_heatmap(lechner_meta, group_var="sample_id", top_n_genes=25)
+```
+
+### Luoma
+```{r luoma-heat, fig.height=7}
+plot_trbv_heatmap(luoma_meta, group_var="sample_id", top_n_genes=25)
+```
+
+---
+
+## 5  Clonotype Rank-Abundance Curves {.tabset}
+
+Log–log rank-abundance (Zipf) plots. A steeper curve indicates a more clonal repertoire; a shallower curve indicates greater diversity.
+
+### Blum
+```{r blum-rank, fig.height=5}
+plot_clonotype_rank_abundance(blum_meta, group_var="sample_id")
+```
+
+### Lechner
+```{r lechner-rank, fig.height=5}
+plot_clonotype_rank_abundance(lechner_meta, group_var="sample_id")
+```
+
+### Luoma
+```{r luoma-rank, fig.height=5}
+plot_clonotype_rank_abundance(luoma_meta, group_var="sample_id")
+```
+
+---
+
+## 6  TRBV Proxy vs True Clonotype Diversity {.tabset}
+
+Each point = one sample. The **red dotted line** is the 1:1 reference. The grey band is a linear regression ± SE. Spearman ρ is shown in the subtitle.
+
+> A high ρ means the TRBV proxy is a reasonable surrogate in this context. A low ρ or points far from the 1:1 line indicate failure modes.
+
+### Blum
+```{r blum-scatter, fig.height=6}
+plot_h_trbv_vs_h_clonotype(blum_res$comparison$table, group_var="sample_id")
+```
+
+### Lechner
+```{r lechner-scatter, fig.height=6}
+plot_h_trbv_vs_h_clonotype(lechner_res$comparison$table, group_var="sample_id")
+```
+
+### Luoma
+```{r luoma-scatter, fig.height=6}
+plot_h_trbv_vs_h_clonotype(luoma_res$comparison$table, group_var="sample_id")
+```
+
+### All datasets
+```{r all-scatter, fig.height=5, fig.width=13}
+all_comp <- map_dfr(results_list, ~ .x$comparison$table, .id="dataset")
+
+sp_all <- tryCatch(cor.test(all_comp$H_TRBV, all_comp$H_clonotype,
+                             method="spearman", exact=FALSE), error=function(e) NULL)
+sub_txt <- if (!is.null(sp_all))
+  paste0("Overall Spearman ρ = ", round(sp_all$estimate, 3),
+         "  (p = ", signif(sp_all$p.value, 3),
+         ", n = ", nrow(all_comp), " samples across 3 datasets)")
+else ""
+
+ggplot(all_comp, aes(x=H_TRBV, y=H_clonotype,
+                      color=dataset, label=sample_id)) +
+  geom_point(size=3, alpha=0.85) +
+  geom_smooth(method="lm", se=TRUE, color="grey35",
+              linetype="dashed", linewidth=0.7) +
+  geom_text_repel(size=2.5, max.overlaps=15) +
+  geom_abline(slope=1, intercept=0, color="red",
+              linetype="dotted", linewidth=0.6) +
+  facet_wrap(vars(dataset), scales="free") +
+  scale_color_manual(values=DATASET_COLORS, name="Dataset") +
+  labs(title   = "TRBV Usage Diversity vs True Clonotype Diversity — All Datasets",
+       subtitle = sub_txt,
+       x = expression(H[TRBV]~"(TRBV usage diversity proxy)"),
+       y = expression(H[clonotype]~"(true CDR3-level diversity)"),
+       caption = "Red dotted line: 1:1 reference. TRBV proxy cannot resolve CDR3 clonotypes.") +
+  theme_bw(base_size=12) + theme(legend.position="bottom")
+```
+
+---
+
+## 7  Clonality Proxy vs True Clonality {.tabset}
+
+Clonality = 1 − normalised Shannon. A value near 1 means a highly oligoclonal repertoire; near 0 means highly diverse.
+
+### Blum
+```{r blum-clon, fig.height=6}
+plot_clonality_comparison(blum_res$comparison$table, group_var="sample_id")
+```
+
+### Lechner
+```{r lechner-clon, fig.height=6}
+plot_clonality_comparison(lechner_res$comparison$table, group_var="sample_id")
+```
+
+### Luoma
+```{r luoma-clon, fig.height=6}
+plot_clonality_comparison(luoma_res$comparison$table, group_var="sample_id")
+```
+
+### All datasets
+```{r all-clon, fig.height=5, fig.width=13}
+ggplot(all_comp, aes(x=TRBV_clonality_proxy, y=true_clonality,
+                      color=dataset, label=sample_id)) +
+  geom_point(size=3, alpha=0.85) +
+  geom_smooth(method="lm", se=TRUE, color="grey35",
+              linetype="dashed", linewidth=0.7) +
+  geom_text_repel(size=2.5, max.overlaps=15) +
+  geom_abline(slope=1, intercept=0, color="red",
+              linetype="dotted", linewidth=0.6) +
+  facet_wrap(vars(dataset), scales="free") +
+  scale_x_continuous(limits=c(0,1)) +
+  scale_y_continuous(limits=c(0,1)) +
+  scale_color_manual(values=DATASET_COLORS, name="Dataset") +
+  labs(title = "TRBV Clonality Proxy vs True Clonality — All Datasets",
+       x = "TRBV clonality proxy (1 − H_norm_TRBV)",
+       y = "True clonality (1 − H_norm_clonotype)") +
+  theme_bw(base_size=12) + theme(legend.position="bottom")
+```
+
+---
+
+## 8  Bland-Altman Analysis {.tabset}
+
+Bias (blue line) and ±1.96 SD limits of agreement (red dashed) between H_TRBV and H_clonotype. Points above zero mean the TRBV proxy overestimates diversity.
+
+### Blum
+```{r blum-ba, fig.height=6}
+plot_bland_altman(blum_res$comparison$table, group_var="sample_id")
+```
+
+### Lechner
+```{r lechner-ba, fig.height=6}
+plot_bland_altman(lechner_res$comparison$table, group_var="sample_id")
+```
+
+### Luoma
+```{r luoma-ba, fig.height=6}
+plot_bland_altman(luoma_res$comparison$table, group_var="sample_id")
+```
+
+---
+
+## 9  Failure Mode Analysis {.tabset}
+
+For each sample, how many clonotypes share the same TRBV gene? Red-filled bars = TRBV families where a single clone accounts for >50% of cells — this is the main failure mode of the proxy.
+
+### Blum
+```{r blum-fail, fig.height=8, fig.width=14}
+plot_within_trbv_diversity(blum_res$benchmark, group_var="sample_id")
+```
+
+### Lechner
+```{r lechner-fail, fig.height=8, fig.width=14}
+plot_within_trbv_diversity(lechner_res$benchmark, group_var="sample_id")
+```
+
+### Luoma
+```{r luoma-fail, fig.height=8, fig.width=14}
+plot_within_trbv_diversity(luoma_res$benchmark, group_var="sample_id")
+```
+
+---
+
+## 10  Cross-Dataset Correlation Summary
+
+```{r corr-summary}
+corr_summary <- map_dfr(results_list, function(res) {
+  comp <- res$comparison
+  if (is.null(comp$spearman) || all(is.na(comp$spearman)))
+    return(tibble(H_spearman_rho=NA, H_spearman_p=NA,
+                  H_pearson_r=NA,   H_pearson_p=NA,
+                  Clonality_spearman_rho=NA, n_samples=nrow(comp$table)))
+  tibble(
+    H_spearman_rho        = round(comp$spearman$estimate,           3),
+    H_spearman_p          = round(comp$spearman$p.value,            4),
+    H_pearson_r           = round(comp$pearson$estimate,            3),
+    H_pearson_p           = round(comp$pearson$p.value,             4),
+    Clonality_spearman_rho = round(comp$clonality_spearman$estimate, 3),
+    n_samples             = nrow(comp$table)
+  )
+}, .id="Dataset")
+
+corr_summary %>%
+  kable(col.names = c("Dataset", "ρ (H)", "p (H)",
+                       "r (H)", "p (H, Pearson)",
+                       "ρ (Clonality)", "N samples"),
+        caption = "Spearman ρ and Pearson r: TRBV proxy vs true clonotype diversity") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE) %>%
+  column_spec(2, bold=TRUE,
+              color = ifelse(corr_summary$H_spearman_p < 0.05, "white", "black"),
+              background = ifelse(corr_summary$H_spearman_p < 0.05, "#2166AC", "#CCCCCC"))
+```
+
+```{r corr-bar, fig.height=4, fig.width=7}
+corr_summary %>%
+  filter(!is.na(H_spearman_rho)) %>%
+  mutate(Dataset = factor(Dataset, levels=c("blum","lechner","luoma")),
+         sig = H_spearman_p < 0.05) %>%
+  ggplot(aes(x=H_spearman_rho, y=Dataset, fill=Dataset)) +
+    geom_col(width=0.55, alpha=0.9) +
+    geom_errorbarh(aes(xmin=0, xmax=H_spearman_rho), height=0) +
+    geom_text(aes(label=sprintf("ρ = %.2f%s", H_spearman_rho,
+                                 ifelse(sig,"*",""))),
+              hjust=-0.1, size=4) +
+    geom_vline(xintercept=0, color="grey40") +
+    scale_fill_manual(values=DATASET_COLORS, guide="none") +
+    scale_x_continuous(limits=c(0, 1.15)) +
+    labs(title   = "H_TRBV vs H_clonotype: Spearman ρ by Dataset",
+         subtitle = "* p < 0.05",
+         x = "Spearman ρ", y = NULL) +
+    theme_bw(base_size=13)
+```
+
+---
+
+## 11  Downsampled Sensitivity Analysis {.tabset}
+
+Each dataset was re-analysed after downsampling to **`r DOWNSAMPLE_N` cells per sample**. Points should track the 1:1 line if estimates are stable across sampling depth.
+
+```{r ds-scatter-fn}
+ds_scatter <- function(res, dataset_id) {
+  if (is.null(res$downsampled)) {
+    return(ggplot() + annotate("text", x=0.5, y=0.5,
+           label="Downsampling disabled (DOWNSAMPLE_N = 0)") + theme_void())
+  }
+  full_tbl <- build_summary_table(res$comparison) %>%
+    select(sample_id, H_TRBV, H_clonotype) %>%
+    rename(H_TRBV_full=H_TRBV, H_clono_full=H_clonotype)
+  ds_tbl <- build_summary_table(res$downsampled$comparison) %>%
+    select(sample_id, H_TRBV, H_clonotype) %>%
+    rename(H_TRBV_ds=H_TRBV, H_clono_ds=H_clonotype)
+  joined <- inner_join(full_tbl, ds_tbl, by="sample_id")
+
+  p1 <- ggplot(joined, aes(H_TRBV_full, H_TRBV_ds, label=sample_id)) +
+    geom_point(color=DATASET_COLORS[dataset_id], size=3) +
+    geom_text_repel(size=2.8) +
+    geom_abline(linetype="dashed", color="grey50") +
+    labs(title="H_TRBV: Full vs Downsampled",
+         x="Full", y=paste0("Downsampled (n=",DOWNSAMPLE_N,")")) +
+    theme_bw(base_size=11)
+
+  p2 <- ggplot(joined, aes(H_clono_full, H_clono_ds, label=sample_id)) +
+    geom_point(color=DATASET_COLORS[dataset_id], size=3) +
+    geom_text_repel(size=2.8) +
+    geom_abline(linetype="dashed", color="grey50") +
+    labs(title="H_clonotype: Full vs Downsampled",
+         x="Full", y=paste0("Downsampled (n=",DOWNSAMPLE_N,")")) +
+    theme_bw(base_size=11)
+
+  p1 + p2
+}
+```
+
+### Blum
+```{r blum-ds, fig.height=5}
+ds_scatter(blum_res, "blum")
+```
+
+### Lechner
+```{r lechner-ds, fig.height=5}
+ds_scatter(lechner_res, "lechner")
+```
+
+### Luoma
+```{r luoma-ds, fig.height=5}
+ds_scatter(luoma_res, "luoma")
+```
+
+---
+
+## 12  Interpretation
+
+```{r interp-table}
+tibble(
+  Scenario = c(
+    "High ρ (>0.7), points near 1:1 line",
+    "Low ρ or points far from 1:1 line",
+    "High H_TRBV, Low H_clonotype",
+    "Low H_TRBV, High H_clonotype",
+    "Red-filled bars in failure mode plot"
+  ),
+  Meaning = c(
+    "TRBV proxy is a reasonable diversity surrogate in this context (e.g. sorted CD8 T cells with no strong V-gene bias)",
+    "Proxy breaks down; full TCR sequencing (CDR3) required for reliable clonality estimation",
+    "Multiple TRBV genes used, but each harbours a single dominant clone — proxy overestimates diversity",
+    "Few TRBV genes used, but each harbours many distinct CDR3s — proxy underestimates diversity (germline V-gene bias without clonal expansion)",
+    "Single clone accounts for >50% of cells within that TRBV family — direct failure of the proxy"
+  )
+) %>%
+  kable() %>%
+  kable_styling(bootstrap_options=c("striped","hover"), full_width=TRUE) %>%
+  row_spec(1, background="#d4edda") %>%
+  row_spec(2:5, background="#fff3cd")
+```
+
+> **Bottom line:** The TRBV usage diversity proxy measures V-gene breadth/evenness — analogous to the NanoString nCounter TCR Diversity score. It **cannot** distinguish CDR3-level clonal expansion from V-gene usage bias. Use matched TCR sequencing (CDR3 clonotypes) for reliable clonality estimation. The proxy may still be useful as a cost-effective screening tool in contexts where matched TCR-seq is unavailable, provided its failure modes are understood.
+
+---
+
+<details>
+<summary>Session info</summary>
+```{r session-info}
+sessionInfo()
+```
+</details>
