@@ -10,7 +10,7 @@ echo/
 │   └── tcr_diversity_functions.R   # All reusable functions (30+ functions)
 ├── analysis/
 │   └── j1568_batch1/
-│       └── run_analysis.R          # Proof-of-concept on J1568 Batch 1
+│       └── run_analysis.R          #
 ├── output/                         # Generated plots and tables (gitignored)
 └── README.md
 ```
