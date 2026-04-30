@@ -1,4 +1,4 @@
-# ECHO — Evaluating Clonality Heuristics in Omics
+# ECHO — Evaluator of Clonality Heuristics in Omics
 
 <img width="250" height="250" alt="ChatGPT Image Apr 30, 2026, 04_43_45 PM" src="https://github.com/user-attachments/assets/c7b51de8-e2a1-4b5e-87f5-f788439a9321" />
 
