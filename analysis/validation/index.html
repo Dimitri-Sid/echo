@@ -4,966 +4,741 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TCR Diversity Validation — Sidiropoulos Lab</title>
-
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-
   <style>
     :root {
-      --blum:    #2166AC;
-      --lechner: #D6604D;
-      --luoma:   #4DAF4A;
-      --bg:      #f8f9fc;
-      --card:    #ffffff;
-      --border:  #e2e8f0;
-      --text:    #1a202c;
-      --muted:   #64748b;
-      --accent:  #3b82f6;
-      --warn:    #f59e0b;
-      --success: #10b981;
-      --radius:  12px;
+      --blum-tissue:#2166AC; --lechner:#D6604D; --luoma:#4DAF4A; --blum-pbmc:#9B59B6;
+      --bg:#f8f9fc; --card:#ffffff; --border:#e2e8f0;
+      --text:#1a202c; --muted:#64748b; --accent:#3b82f6;
+      --radius:12px;
     }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    header{background:linear-gradient(135deg,#1e3a5f 0%,#2d6da8 100%);color:white;padding:48px 24px 40px;text-align:center}
+    header .eyebrow{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;opacity:.7;margin-bottom:10px}
+    header h1{font-size:clamp(22px,4vw,36px);font-weight:700;margin-bottom:10px}
+    header p{font-size:15px;opacity:.85;max-width:720px;margin:0 auto 18px}
+    .warn-banner{display:inline-block;background:rgba(245,158,11,.2);border:1px solid rgba(245,158,11,.5);border-radius:6px;padding:8px 16px;font-size:13px;color:#fde68a}
 
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-    }
+    nav{background:white;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;padding:0 24px;display:flex;gap:4px;overflow-x:auto}
+    nav a{display:block;padding:14px 16px;font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;white-space:nowrap;border-bottom:2px solid transparent;transition:color .2s,border-color .2s}
+    nav a:hover,nav a.active{color:var(--accent);border-bottom-color:var(--accent)}
 
-    /* ── Header ── */
-    header {
-      background: linear-gradient(135deg, #1e3a5f 0%, #2d6da8 100%);
-      color: white;
-      padding: 48px 24px 40px;
-      text-align: center;
-    }
-    header .eyebrow {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      opacity: 0.7;
-      margin-bottom: 10px;
-    }
-    header h1 { font-size: clamp(22px, 4vw, 36px); font-weight: 700; margin-bottom: 10px; }
-    header p  { font-size: 15px; opacity: 0.85; max-width: 680px; margin: 0 auto 18px; }
-    .warning-banner {
-      display: inline-block;
-      background: rgba(245,158,11,0.2);
-      border: 1px solid rgba(245,158,11,0.5);
-      border-radius: 6px;
-      padding: 8px 16px;
-      font-size: 13px;
-      color: #fde68a;
-    }
+    main{max-width:1320px;margin:0 auto;padding:32px 24px 80px}
+    section{margin-bottom:56px}
+    section h2{font-size:20px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+    section h2 .num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:var(--accent);color:white;border-radius:50%;font-size:13px;font-weight:700;flex-shrink:0}
+    .sec-desc{color:var(--muted);font-size:14px;margin-bottom:24px}
 
-    /* ── Nav ── */
-    nav {
-      background: white;
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      padding: 0 24px;
-      display: flex;
-      gap: 4px;
-      overflow-x: auto;
-    }
-    nav a {
-      display: block;
-      padding: 14px 16px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--muted);
-      text-decoration: none;
-      white-space: nowrap;
-      border-bottom: 2px solid transparent;
-      transition: color .2s, border-color .2s;
-    }
-    nav a:hover, nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .grid-4{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+    .grid-3{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+    .grid-2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(400px,1fr))}
 
-    /* ── Layout ── */
-    main { max-width: 1280px; margin: 0 auto; padding: 32px 24px 80px; }
+    .ds-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+    .ds-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+    .ds-name{font-size:16px;font-weight:700}
+    .ds-meta{font-size:12px;color:var(--muted)}
+    .stat-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+    .stat .val{font-size:22px;font-weight:700;line-height:1.1}
+    .stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 
-    section { margin-bottom: 56px; }
-    section h2 {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 4px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    section h2 .num {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px; height: 28px;
-      background: var(--accent);
-      color: white;
-      border-radius: 50%;
-      font-size: 13px;
-      font-weight: 700;
-      flex-shrink: 0;
-    }
-    .section-desc { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+    .tab-btn{padding:7px 16px;border:1px solid var(--border);border-radius:6px;background:white;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);transition:all .15s}
+    .tab-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .tab-btn.active{background:var(--accent);color:white;border-color:var(--accent)}
+    .tab-pane{display:none}
+    .tab-pane.active{display:block}
 
-    /* ── Cards ── */
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.06);
-    }
-    .card-grid { display: grid; gap: 16px; }
-    .card-grid-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-    .card-grid-2 { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+    .rho-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600}
+    .rho-high{background:#d1fae5;color:#065f46}
+    .rho-med {background:#fef3c7;color:#92400e}
+    .rho-low {background:#fee2e2;color:#991b1b}
 
-    .dataset-card .ds-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-    .ds-dot {
-      width: 14px; height: 14px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .ds-name { font-size: 16px; font-weight: 700; }
-    .ds-meta { font-size: 12px; color: var(--muted); }
-    .stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
-    .stat { flex: 1; min-width: 80px; }
-    .stat .val { font-size: 22px; font-weight: 700; line-height: 1.1; }
-    .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{background:#f1f5f9;padding:10px 14px;text-align:left;font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+    tbody td{padding:10px 14px;border-bottom:1px solid #f1f5f9}
+    tbody tr:last-child td{border-bottom:none}
+    tbody tr:hover{background:#f8fafc}
 
-    /* ── Tabs ── */
-    .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
-    .tab-btn {
-      padding: 7px 16px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: white;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      color: var(--muted);
-      transition: all .15s;
-    }
-    .tab-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
+    .plot-box{border-radius:var(--radius);overflow:hidden;min-height:420px}
 
-    /* ── Correlation badge ── */
-    .rho-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .rho-high   { background: #d1fae5; color: #065f46; }
-    .rho-medium { background: #fef3c7; color: #92400e; }
-    .rho-low    { background: #fee2e2; color: #991b1b; }
+    .gene-chip{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-family:'JetBrains Mono',monospace;margin:2px;background:#f1f5f9;color:#475569}
+    .gene-chip.trbv{background:#dbeafe;color:#1d4ed8}
+    .gene-chip.trbj{background:#dcfce7;color:#166534}
+    .gene-chip.trbd{background:#fef3c7;color:#92400e}
+    .gene-chip.trav{background:#fce7f3;color:#9d174d}
+    .gene-chip.traj{background:#ede9fe;color:#6d28d9}
 
-    /* ── Table ── */
-    .tbl-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    thead th {
-      background: #f1f5f9;
-      padding: 10px 14px;
-      text-align: left;
-      font-weight: 600;
-      font-size: 12px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-    tbody td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; }
-    tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover { background: #f8fafc; }
+    .method-note{background:#eff6ff;border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:14px 18px;font-size:13px;color:#1e40af;margin-bottom:20px}
 
-    /* ── Interpretation table ── */
-    .interp-row { display: grid; grid-template-columns: 1fr 2fr; gap: 0; }
-    .interp-row + .interp-row { border-top: 1px solid var(--border); }
-    .interp-row .scenario { padding: 14px; font-weight: 500; font-size: 14px; }
-    .interp-row .meaning  { padding: 14px; font-size: 14px; color: var(--muted); border-left: 1px solid var(--border); }
-    .interp-row.good  .scenario { color: #065f46; background: #f0fdf4; }
-    .interp-row.warn  .scenario { color: #92400e; background: #fffbeb; }
-    .interp-row.bad   .scenario { color: #991b1b; background: #fef2f2; }
+    .interp-row{display:grid;grid-template-columns:1fr 2fr}
+    .interp-row+.interp-row{border-top:1px solid var(--border)}
+    .interp-row .scenario{padding:14px;font-weight:500;font-size:14px}
+    .interp-row .meaning{padding:14px;font-size:14px;color:var(--muted);border-left:1px solid var(--border)}
+    .interp-row.good .scenario{color:#065f46;background:#f0fdf4}
+    .interp-row.warn .scenario{color:#92400e;background:#fffbeb}
+    .interp-row.bad  .scenario{color:#991b1b;background:#fef2f2}
 
-    /* ── Plot containers ── */
-    .plot-box { border-radius: var(--radius); overflow: hidden; min-height: 420px; }
-
-    /* ── Method note ── */
-    .method-note {
-      background: #eff6ff;
-      border-left: 4px solid var(--accent);
-      border-radius: 0 8px 8px 0;
-      padding: 14px 18px;
-      font-size: 13px;
-      color: #1e40af;
-      margin-bottom: 20px;
-    }
-
-    /* ── Footer ── */
-    footer {
-      text-align: center;
-      padding: 24px;
-      font-size: 12px;
-      color: var(--muted);
-      border-top: 1px solid var(--border);
-    }
-
-    code {
-      font-family: 'JetBrains Mono', monospace;
-      background: #f1f5f9;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 12px;
-    }
-
-    @media (max-width: 600px) {
-      .interp-row { grid-template-columns: 1fr; }
-      .interp-row .meaning { border-left: none; border-top: 1px solid var(--border); }
-    }
+    code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px}
+    footer{text-align:center;padding:24px;font-size:12px;color:var(--muted);border-top:1px solid var(--border)}
+    @media(max-width:600px){.interp-row{grid-template-columns:1fr}.interp-row .meaning{border-left:none;border-top:1px solid var(--border)}}
   </style>
 </head>
 <body>
 
-<!-- ── Header ───────────────────────────────────────────────────────────────── -->
 <header>
   <div class="eyebrow">Sidiropoulos Lab · ECHO Project</div>
   <h1>TCR Diversity Validation Report</h1>
-  <p>NanoString-style TRBV usage diversity proxy vs true CDR3-level clonotype diversity across three published single-cell TCR sequencing datasets.</p>
-  <div class="warning-banner">
-    ⚠ TRBV proxy ≠ true TCR diversity — measures V-gene breadth only, cannot resolve CDR3 clonotypes
-  </div>
+  <p>NanoString-style TRBV proxy vs true CDR3 clonotype diversity across four published single-cell TCR sequencing datasets. Extended to all canonical TCR gene segments: TRBV, TRBD, TRBJ, TRAV, and TRAJ.</p>
+  <div class="warn-banner">⚠ TRBV proxy ≠ true TCR diversity — measures V-gene breadth only, cannot resolve CDR3 clonotypes</div>
 </header>
 
-<!-- ── Nav ──────────────────────────────────────────────────────────────────── -->
 <nav id="sitenav">
-  <a href="#overview"     class="active">Overview</a>
-  <a href="#trbv-usage">  TRBV Usage</a>
-  <a href="#scatter">     Proxy vs True</a>
-  <a href="#clonality">   Clonality</a>
-  <a href="#bland-altman">Bland-Altman</a>
-  <a href="#failure">     Failure Modes</a>
-  <a href="#correlation"> Correlations</a>
-  <a href="#methods">     Methods</a>
+  <a href="#overview"   class="active">Overview</a>
+  <a href="#genes">Gene List</a>
+  <a href="#trbv-usage">TRBV Usage</a>
+  <a href="#alpha">Alpha Chain</a>
+  <a href="#segments">All Segments</a>
+  <a href="#scatter">Proxy vs True</a>
+  <a href="#clonality">Clonality</a>
+  <a href="#ba">Bland-Altman</a>
+  <a href="#failure">Failure Modes</a>
+  <a href="#correlation">Correlations</a>
+  <a href="#methods">Methods</a>
 </nav>
 
-<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
 <main>
 
-  <!-- 1 · Overview -->
-  <section id="overview">
-    <h2><span class="num">1</span> Dataset Overview</h2>
-    <p class="section-desc">Three published single-cell RNA + TCR sequencing datasets used as external validation cohorts.</p>
-
-    <div class="card-grid card-grid-3">
-
-      <div class="card dataset-card">
-        <div class="ds-header">
-          <div class="ds-dot" style="background:var(--blum)"></div>
-          <div>
-            <div class="ds-name">Blum et al.</div>
-            <div class="ds-meta">Combined tissue · Mixed T cells</div>
-          </div>
-        </div>
-        <div class="stat-row" id="blum-stats">
-          <div class="stat"><div class="val" id="blum-cells">—</div><div class="lbl">Cells</div></div>
-          <div class="stat"><div class="val" id="blum-samples">—</div><div class="lbl">Samples</div></div>
-          <div class="stat"><div class="val" id="blum-clones">—</div><div class="lbl">Clonotypes</div></div>
-          <div class="stat"><div class="val" id="blum-rho">—</div><div class="lbl">Spearman ρ</div></div>
-        </div>
-      </div>
-
-      <div class="card dataset-card">
-        <div class="ds-header">
-          <div class="ds-dot" style="background:var(--lechner)"></div>
-          <div>
-            <div class="ds-name">Lechner et al.</div>
-            <div class="ds-meta">Thyroiditis tissue · CD8 T cells</div>
-          </div>
-        </div>
-        <div class="stat-row">
-          <div class="stat"><div class="val" id="lechner-cells">—</div><div class="lbl">Cells</div></div>
-          <div class="stat"><div class="val" id="lechner-samples">—</div><div class="lbl">Samples</div></div>
-          <div class="stat"><div class="val" id="lechner-clones">—</div><div class="lbl">Clonotypes</div></div>
-          <div class="stat"><div class="val" id="lechner-rho">—</div><div class="lbl">Spearman ρ</div></div>
-        </div>
-      </div>
-
-      <div class="card dataset-card">
-        <div class="ds-header">
-          <div class="ds-dot" style="background:var(--luoma)"></div>
-          <div>
-            <div class="ds-name">Luoma et al.</div>
-            <div class="ds-meta">Colitis tissue · CD8 T cells</div>
-          </div>
-        </div>
-        <div class="stat-row">
-          <div class="stat"><div class="val" id="luoma-cells">—</div><div class="lbl">Cells</div></div>
-          <div class="stat"><div class="val" id="luoma-samples">—</div><div class="lbl">Samples</div></div>
-          <div class="stat"><div class="val" id="luoma-clones">—</div><div class="lbl">Clonotypes</div></div>
-          <div class="stat"><div class="val" id="luoma-rho">—</div><div class="lbl">Spearman ρ</div></div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- 2 · TRBV Usage -->
-  <section id="trbv-usage">
-    <h2><span class="num">2</span> TRBV Gene Usage</h2>
-    <p class="section-desc">Proportion of T cells assigned to each TRBV gene per sample. Top 20 genes shown; remainder grouped as "Other".</p>
-
-    <div class="tabs" id="trbv-tabs">
-      <button class="tab-btn active" data-tab="trbv-blum">Blum</button>
-      <button class="tab-btn"        data-tab="trbv-lechner">Lechner</button>
-      <button class="tab-btn"        data-tab="trbv-luoma">Luoma</button>
-    </div>
-
+<!-- 1 · Overview -->
+<section id="overview">
+  <h2><span class="num">1</span> Dataset Overview</h2>
+  <p class="sec-desc">Four published single-cell RNA + TCR sequencing datasets used as external validation cohorts.</p>
+  <div class="grid-4">
     <div class="card">
-      <div class="tab-pane active" id="trbv-blum">
-        <div class="plot-box" id="plot-trbv-blum"></div>
-      </div>
-      <div class="tab-pane" id="trbv-lechner">
-        <div class="plot-box" id="plot-trbv-lechner"></div>
-      </div>
-      <div class="tab-pane" id="trbv-luoma">
-        <div class="plot-box" id="plot-trbv-luoma"></div>
+      <div class="ds-header"><div class="ds-dot" style="background:var(--blum-tissue)"></div><div><div class="ds-name">Blum Tissue</div><div class="ds-meta">Combined tissue · Mixed T cells</div></div></div>
+      <div class="stat-row">
+        <div class="stat"><div class="val" id="bt-cells">—</div><div class="lbl">Cells</div></div>
+        <div class="stat"><div class="val" id="bt-samples">—</div><div class="lbl">Samples</div></div>
+        <div class="stat"><div class="val" id="bt-clones">—</div><div class="lbl">Clonotypes</div></div>
+        <div class="stat"><div class="val" id="bt-rho">—</div><div class="lbl">TRBV ρ</div></div>
       </div>
     </div>
-  </section>
-
-  <!-- 3 · Proxy vs True Diversity -->
-  <section id="scatter">
-    <h2><span class="num">3</span> TRBV Proxy vs True Clonotype Diversity</h2>
-    <p class="section-desc">
-      Each point = one sample. Red dotted line = 1:1 reference. Grey band = linear regression ± SE.
-      Points <em>above</em> the 1:1 line mean the proxy overestimates diversity; <em>below</em> means it underestimates.
-    </p>
-
-    <div class="tabs" id="scatter-tabs">
-      <button class="tab-btn active" data-tab="scatter-all">All datasets</button>
-      <button class="tab-btn"        data-tab="scatter-blum">Blum</button>
-      <button class="tab-btn"        data-tab="scatter-lechner">Lechner</button>
-      <button class="tab-btn"        data-tab="scatter-luoma">Luoma</button>
-    </div>
-
     <div class="card">
-      <div class="tab-pane active" id="scatter-all">
-        <div class="plot-box" id="plot-scatter-all" style="min-height:500px"></div>
-      </div>
-      <div class="tab-pane" id="scatter-blum">
-        <div class="plot-box" id="plot-scatter-blum"></div>
-      </div>
-      <div class="tab-pane" id="scatter-lechner">
-        <div class="plot-box" id="plot-scatter-lechner"></div>
-      </div>
-      <div class="tab-pane" id="scatter-luoma">
-        <div class="plot-box" id="plot-scatter-luoma"></div>
+      <div class="ds-header"><div class="ds-dot" style="background:var(--lechner)"></div><div><div class="ds-name">Lechner</div><div class="ds-meta">Thyroiditis · CD8 T cells</div></div></div>
+      <div class="stat-row">
+        <div class="stat"><div class="val" id="le-cells">—</div><div class="lbl">Cells</div></div>
+        <div class="stat"><div class="val" id="le-samples">—</div><div class="lbl">Samples</div></div>
+        <div class="stat"><div class="val" id="le-clones">—</div><div class="lbl">Clonotypes</div></div>
+        <div class="stat"><div class="val" id="le-rho">—</div><div class="lbl">TRBV ρ</div></div>
       </div>
     </div>
-  </section>
-
-  <!-- 4 · Clonality -->
-  <section id="clonality">
-    <h2><span class="num">4</span> Clonality Proxy vs True Clonality</h2>
-    <p class="section-desc">Clonality = 1 − normalised Shannon. Values near 1 = highly oligoclonal; near 0 = highly diverse.</p>
-
-    <div class="tabs" id="clon-tabs">
-      <button class="tab-btn active" data-tab="clon-all">All datasets</button>
-      <button class="tab-btn"        data-tab="clon-blum">Blum</button>
-      <button class="tab-btn"        data-tab="clon-lechner">Lechner</button>
-      <button class="tab-btn"        data-tab="clon-luoma">Luoma</button>
-    </div>
-
     <div class="card">
-      <div class="tab-pane active" id="clon-all">
-        <div class="plot-box" id="plot-clon-all" style="min-height:500px"></div>
-      </div>
-      <div class="tab-pane" id="clon-blum">
-        <div class="plot-box" id="plot-clon-blum"></div>
-      </div>
-      <div class="tab-pane" id="clon-lechner">
-        <div class="plot-box" id="plot-clon-lechner"></div>
-      </div>
-      <div class="tab-pane" id="clon-luoma">
-        <div class="plot-box" id="plot-clon-luoma"></div>
+      <div class="ds-header"><div class="ds-dot" style="background:var(--luoma)"></div><div><div class="ds-name">Luoma</div><div class="ds-meta">Colitis tissue · CD8 T cells</div></div></div>
+      <div class="stat-row">
+        <div class="stat"><div class="val" id="lu-cells">—</div><div class="lbl">Cells</div></div>
+        <div class="stat"><div class="val" id="lu-samples">—</div><div class="lbl">Samples</div></div>
+        <div class="stat"><div class="val" id="lu-clones">—</div><div class="lbl">Clonotypes</div></div>
+        <div class="stat"><div class="val" id="lu-rho">—</div><div class="lbl">TRBV ρ</div></div>
       </div>
     </div>
-  </section>
-
-  <!-- 5 · Bland-Altman -->
-  <section id="bland-altman">
-    <h2><span class="num">5</span> Bland-Altman Agreement</h2>
-    <p class="section-desc">
-      Difference (H<sub>TRBV</sub> − H<sub>clonotype</sub>) vs mean. Blue = mean bias; red dashed = ±1.96 SD limits of agreement.
-      Points above zero = TRBV proxy overestimates diversity.
-    </p>
-
-    <div class="card-grid card-grid-3">
-      <div class="card"><div class="plot-box" id="plot-ba-blum"></div></div>
-      <div class="card"><div class="plot-box" id="plot-ba-lechner"></div></div>
-      <div class="card"><div class="plot-box" id="plot-ba-luoma"></div></div>
-    </div>
-  </section>
-
-  <!-- 6 · Failure Modes -->
-  <section id="failure">
-    <h2><span class="num">6</span> Failure Mode Analysis</h2>
-    <p class="section-desc">
-      For each TRBV gene family: number of unique clonotypes within that family (bar length) and fraction of cells
-      belonging to the dominant clone (colour). <strong style="color:#c0392b">Red</strong> = one clone accounts for &gt;50% of cells — the primary failure mode of the proxy.
-    </p>
-
-    <div class="tabs" id="fail-tabs">
-      <button class="tab-btn active" data-tab="fail-blum">Blum</button>
-      <button class="tab-btn"        data-tab="fail-lechner">Lechner</button>
-      <button class="tab-btn"        data-tab="fail-luoma">Luoma</button>
-    </div>
-
     <div class="card">
-      <div class="tab-pane active" id="fail-blum">
-        <div class="plot-box" id="plot-fail-blum" style="min-height:500px"></div>
-      </div>
-      <div class="tab-pane" id="fail-lechner">
-        <div class="plot-box" id="plot-fail-lechner" style="min-height:500px"></div>
-      </div>
-      <div class="tab-pane" id="fail-luoma">
-        <div class="plot-box" id="plot-fail-luoma" style="min-height:500px"></div>
+      <div class="ds-header"><div class="ds-dot" style="background:var(--blum-pbmc)"></div><div><div class="ds-name">Blum PBMC</div><div class="ds-meta">PBMC · Paired TCR data</div></div></div>
+      <div class="stat-row">
+        <div class="stat"><div class="val" id="bp-cells">—</div><div class="lbl">Cells</div></div>
+        <div class="stat"><div class="val" id="bp-samples">—</div><div class="lbl">Samples</div></div>
+        <div class="stat"><div class="val" id="bp-clones">—</div><div class="lbl">Clonotypes</div></div>
+        <div class="stat"><div class="val" id="bp-rho">—</div><div class="lbl">TRBV ρ</div></div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- 7 · Correlation Summary -->
-  <section id="correlation">
-    <h2><span class="num">7</span> Cross-Dataset Correlation Summary</h2>
-    <p class="section-desc">Spearman ρ and Pearson r between the TRBV proxy and true clonotype diversity metrics.</p>
-
-    <div class="card-grid card-grid-2">
-      <div class="card">
-        <div class="plot-box" id="plot-rho-bar" style="min-height:320px"></div>
-      </div>
-      <div class="card" style="display:flex;flex-direction:column;justify-content:center;">
-        <div class="tbl-wrap">
-          <table id="corr-table">
-            <thead>
-              <tr>
-                <th>Dataset</th>
-                <th>Spearman ρ (H)</th>
-                <th>p-value</th>
-                <th>Pearson r (H)</th>
-                <th>ρ (Clonality)</th>
-                <th>N samples</th>
-              </tr>
-            </thead>
-            <tbody id="corr-tbody">
-              <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">
-                Run <code>rmarkdown::render("tcr_diversity_report.Rmd")</code> to populate with real data.
-              </td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 8 · Methods / Interpretation -->
-  <section id="methods">
-    <h2><span class="num">8</span> Interpretation Guide</h2>
-    <p class="section-desc">How to read the results and understand the proxy's limitations.</p>
-
-    <div class="method-note">
-      The TRBV usage diversity proxy is analogous to the NanoString nCounter TCR Diversity score.
-      It quantifies V-gene breadth and evenness. It <strong>cannot</strong> distinguish CDR3-level
-      clonal expansion from V-gene usage bias driven by germline or developmental constraints.
-    </div>
-
+<!-- 2 · Gene List -->
+<section id="genes">
+  <h2><span class="num">2</span> Canonical TCR Gene Panel</h2>
+  <p class="sec-desc">All gene segments included in the analysis, following IMGT human TCR nomenclature.</p>
+  <div class="grid-2">
     <div class="card">
-      <div class="interp-row good">
-        <div class="scenario">✓ High ρ (&gt;0.7), points near 1:1 line</div>
-        <div class="meaning">The TRBV proxy is a reasonable diversity surrogate in this context — typical of sorted CD8 T cells with no strong V-gene bias.</div>
-      </div>
-      <div class="interp-row warn">
-        <div class="scenario">△ Low ρ or systematic offset</div>
-        <div class="meaning">Proxy breaks down; full TCR sequencing (CDR3 level) is required for reliable clonality estimation in this context.</div>
-      </div>
-      <div class="interp-row bad">
-        <div class="scenario">✗ High H<sub>TRBV</sub>, Low H<sub>clonotype</sub></div>
-        <div class="meaning">Multiple TRBV genes used, but each harbours a single dominant clone. The proxy overestimates diversity. Classic: vaccine-driven oligoclonal expansion using diverse TRBV families.</div>
-      </div>
-      <div class="interp-row bad">
-        <div class="scenario">✗ Low H<sub>TRBV</sub>, High H<sub>clonotype</sub></div>
-        <div class="meaning">Few TRBV genes used, but each harbours many distinct CDR3s. The proxy underestimates diversity. Classic: germline V-gene bias with no actual clonal expansion.</div>
-      </div>
-      <div class="interp-row bad">
-        <div class="scenario">✗ Red bars in failure-mode plot</div>
-        <div class="meaning">A single clonotype accounts for &gt;50% of cells within a TRBV family — the direct failure case where CDR3-level resolution is essential.</div>
-      </div>
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:10px">Beta chain (TRBV · TRBD · TRBJ)</h3>
+      <div style="margin-bottom:8px"><span style="font-size:12px;font-weight:600;color:var(--muted)">TRBV (50 genes)</span><br id="trbv-chips"></div>
+      <div style="margin-bottom:8px"><span style="font-size:12px;font-weight:600;color:var(--muted)">TRBD (2 genes)</span><br><span class="gene-chip trbd">TRBD1</span><span class="gene-chip trbd">TRBD2</span></div>
+      <div><span style="font-size:12px;font-weight:600;color:var(--muted)">TRBJ (13 genes)</span><br id="trbj-chips"></div>
     </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:10px">Alpha chain (TRAV · TRAJ)</h3>
+      <div style="margin-bottom:8px"><span style="font-size:12px;font-weight:600;color:var(--muted)">TRAV (41 genes)</span><br id="trav-chips"></div>
+      <div><span style="font-size:12px;font-weight:600;color:var(--muted)">TRAJ (61 genes)</span><br id="traj-chips"></div>
+    </div>
+  </div>
+</section>
 
-    <div class="card" style="margin-top:16px">
-      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Diversity metric definitions</h3>
+<!-- 3 · TRBV Usage -->
+<section id="trbv-usage">
+  <h2><span class="num">3</span> TRBV Gene Usage</h2>
+  <p class="sec-desc">Proportion of T cells assigned to each TRBV gene per sample. Top 20 genes shown; remainder grouped as "Other".</p>
+  <div class="tabs" id="trbv-tabs">
+    <button class="tab-btn active" data-tab="trbv-bt">Blum Tissue</button>
+    <button class="tab-btn" data-tab="trbv-le">Lechner</button>
+    <button class="tab-btn" data-tab="trbv-lu">Luoma</button>
+    <button class="tab-btn" data-tab="trbv-bp">Blum PBMC</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="trbv-bt"><div class="plot-box" id="plot-trbv-bt"></div></div>
+    <div class="tab-pane" id="trbv-le"><div class="plot-box" id="plot-trbv-le"></div></div>
+    <div class="tab-pane" id="trbv-lu"><div class="plot-box" id="plot-trbv-lu"></div></div>
+    <div class="tab-pane" id="trbv-bp"><div class="plot-box" id="plot-trbv-bp"></div></div>
+  </div>
+</section>
+
+<!-- 4 · Alpha Chain -->
+<section id="alpha">
+  <h2><span class="num">4</span> Alpha Chain Gene Usage (TRAV · TRAJ)</h2>
+  <p class="sec-desc">TRAV and TRAJ gene usage proportions per sample. Datasets without matched alpha-chain TCR data will show no data.</p>
+  <div class="tabs" id="alpha-tabs">
+    <button class="tab-btn active" data-tab="alpha-bt">Blum Tissue</button>
+    <button class="tab-btn" data-tab="alpha-le">Lechner</button>
+    <button class="tab-btn" data-tab="alpha-lu">Luoma</button>
+    <button class="tab-btn" data-tab="alpha-bp">Blum PBMC</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="alpha-bt"><div class="grid-2"><div><div class="plot-box" id="plot-trav-bt"></div></div><div><div class="plot-box" id="plot-traj-bt"></div></div></div></div>
+    <div class="tab-pane" id="alpha-le"><div class="grid-2"><div><div class="plot-box" id="plot-trav-le"></div></div><div><div class="plot-box" id="plot-traj-le"></div></div></div></div>
+    <div class="tab-pane" id="alpha-lu"><div class="grid-2"><div><div class="plot-box" id="plot-trav-lu"></div></div><div><div class="plot-box" id="plot-traj-lu"></div></div></div></div>
+    <div class="tab-pane" id="alpha-bp"><div class="grid-2"><div><div class="plot-box" id="plot-trav-bp"></div></div><div><div class="plot-box" id="plot-traj-bp"></div></div></div></div>
+  </div>
+</section>
+
+<!-- 5 · All Segments Correlation -->
+<section id="segments">
+  <h2><span class="num">5</span> All TCR Segments — Correlation with True Clonotype Diversity</h2>
+  <p class="sec-desc">
+    Spearman ρ of each gene-segment diversity metric vs true CDR3 clonotype diversity (H<sub>clonotype</sub>).
+    Segments are ranked from weakest to strongest proxy. The paired four-segment metric (TRAV:TRAJ:TRBV:TRBJ)
+    provides the highest resolution short of full CDR3 sequencing.
+  </p>
+  <div class="tabs" id="seg-tabs">
+    <button class="tab-btn active" data-tab="seg-all">All datasets</button>
+    <button class="tab-btn" data-tab="seg-bt">Blum Tissue</button>
+    <button class="tab-btn" data-tab="seg-le">Lechner</button>
+    <button class="tab-btn" data-tab="seg-lu">Luoma</button>
+    <button class="tab-btn" data-tab="seg-bp">Blum PBMC</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="seg-all"><div class="plot-box" id="plot-seg-all" style="min-height:480px"></div></div>
+    <div class="tab-pane" id="seg-bt"><div class="plot-box" id="plot-seg-bt" style="min-height:480px"></div></div>
+    <div class="tab-pane" id="seg-le"><div class="plot-box" id="plot-seg-le" style="min-height:480px"></div></div>
+    <div class="tab-pane" id="seg-lu"><div class="plot-box" id="plot-seg-lu" style="min-height:480px"></div></div>
+    <div class="tab-pane" id="seg-bp"><div class="plot-box" id="plot-seg-bp" style="min-height:480px"></div></div>
+  </div>
+</section>
+
+<!-- 6 · Proxy vs True -->
+<section id="scatter">
+  <h2><span class="num">6</span> TRBV Proxy vs True Clonotype Diversity</h2>
+  <p class="sec-desc">Each point = one sample. Red dotted line = 1:1 reference. Points above it = proxy overestimates diversity.</p>
+  <div class="tabs" id="scatter-tabs">
+    <button class="tab-btn active" data-tab="sc-all">All datasets</button>
+    <button class="tab-btn" data-tab="sc-bt">Blum Tissue</button>
+    <button class="tab-btn" data-tab="sc-le">Lechner</button>
+    <button class="tab-btn" data-tab="sc-lu">Luoma</button>
+    <button class="tab-btn" data-tab="sc-bp">Blum PBMC</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="sc-all"><div class="plot-box" id="plot-sc-all" style="min-height:500px"></div></div>
+    <div class="tab-pane" id="sc-bt"><div class="plot-box" id="plot-sc-bt"></div></div>
+    <div class="tab-pane" id="sc-le"><div class="plot-box" id="plot-sc-le"></div></div>
+    <div class="tab-pane" id="sc-lu"><div class="plot-box" id="plot-sc-lu"></div></div>
+    <div class="tab-pane" id="sc-bp"><div class="plot-box" id="plot-sc-bp"></div></div>
+  </div>
+</section>
+
+<!-- 7 · Clonality -->
+<section id="clonality">
+  <h2><span class="num">7</span> Clonality Proxy vs True Clonality</h2>
+  <p class="sec-desc">Clonality = 1 − normalised Shannon. Near 1 = highly oligoclonal; near 0 = highly diverse.</p>
+  <div class="tabs" id="clon-tabs">
+    <button class="tab-btn active" data-tab="cn-all">All datasets</button>
+    <button class="tab-btn" data-tab="cn-bt">Blum Tissue</button>
+    <button class="tab-btn" data-tab="cn-le">Lechner</button>
+    <button class="tab-btn" data-tab="cn-lu">Luoma</button>
+    <button class="tab-btn" data-tab="cn-bp">Blum PBMC</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="cn-all"><div class="plot-box" id="plot-cn-all" style="min-height:500px"></div></div>
+    <div class="tab-pane" id="cn-bt"><div class="plot-box" id="plot-cn-bt"></div></div>
+    <div class="tab-pane" id="cn-le"><div class="plot-box" id="plot-cn-le"></div></div>
+    <div class="tab-pane" id="cn-lu"><div class="plot-box" id="plot-cn-lu"></div></div>
+    <div class="tab-pane" id="cn-bp"><div class="plot-box" id="plot-cn-bp"></div></div>
+  </div>
+</section>
+
+<!-- 8 · Bland-Altman -->
+<section id="ba">
+  <h2><span class="num">8</span> Bland-Altman Agreement</h2>
+  <p class="sec-desc">H<sub>TRBV</sub> − H<sub>clonotype</sub> vs mean. Blue = mean bias; red dashed = ±1.96 SD limits of agreement.</p>
+  <div class="grid-4">
+    <div class="card"><div class="plot-box" id="plot-ba-bt"></div></div>
+    <div class="card"><div class="plot-box" id="plot-ba-le"></div></div>
+    <div class="card"><div class="plot-box" id="plot-ba-lu"></div></div>
+    <div class="card"><div class="plot-box" id="plot-ba-bp"></div></div>
+  </div>
+</section>
+
+<!-- 9 · Failure Modes -->
+<section id="failure">
+  <h2><span class="num">9</span> Failure Mode Analysis</h2>
+  <p class="sec-desc">Within-TRBV clonotype counts and dominant clone fraction per gene family. <strong style="color:#c0392b">Red</strong> = one clone &gt;50% of cells in that TRBV family.</p>
+  <div class="tabs" id="fail-tabs">
+    <button class="tab-btn active" data-tab="fa-bt">Blum Tissue</button>
+    <button class="tab-btn" data-tab="fa-le">Lechner</button>
+    <button class="tab-btn" data-tab="fa-lu">Luoma</button>
+    <button class="tab-btn" data-tab="fa-bp">Blum PBMC</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="fa-bt"><div class="plot-box" id="plot-fa-bt" style="min-height:500px"></div></div>
+    <div class="tab-pane" id="fa-le"><div class="plot-box" id="plot-fa-le" style="min-height:500px"></div></div>
+    <div class="tab-pane" id="fa-lu"><div class="plot-box" id="plot-fa-lu" style="min-height:500px"></div></div>
+    <div class="tab-pane" id="fa-bp"><div class="plot-box" id="plot-fa-bp" style="min-height:500px"></div></div>
+  </div>
+</section>
+
+<!-- 10 · Correlations -->
+<section id="correlation">
+  <h2><span class="num">10</span> Cross-Dataset Correlation Summary</h2>
+  <p class="sec-desc">Spearman ρ between each TCR proxy metric and true clonotype diversity, by dataset.</p>
+  <div class="grid-2">
+    <div class="card"><div class="plot-box" id="plot-rho-bar" style="min-height:340px"></div></div>
+    <div class="card">
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Metric</th><th>Formula</th><th>Range</th><th>Interpretation</th></tr></thead>
-          <tbody>
-            <tr><td><code>H_TRBV</code></td><td>−Σ p<sub>i</sub> ln p<sub>i</sub>  (TRBV genes)</td><td>0 → ln(S)</td><td>TRBV usage breadth/evenness (proxy only)</td></tr>
-            <tr><td><code>H_clonotype</code></td><td>−Σ p<sub>i</sub> ln p<sub>i</sub>  (CDR3 clonotypes)</td><td>0 → ln(N)</td><td>True clonal diversity (ground truth)</td></tr>
-            <tr><td><code>H_norm</code></td><td>H / ln(S)  (Pielou's J)</td><td>0 – 1</td><td>1 = perfectly even, 0 = fully dominated</td></tr>
-            <tr><td><code>true_clonality</code></td><td>1 − H_norm_clonotype</td><td>0 – 1</td><td>1 = oligoclonal, 0 = diverse (Adaptive-style)</td></tr>
-            <tr><td><code>simpson</code></td><td>1 − Σ n(n−1)/N(N−1)</td><td>0 – 1</td><td>Probability that two random cells have different clonotypes</td></tr>
-            <tr><td><code>gini</code></td><td>2Σ rank·n / (N·Σn) − (S+1)/S</td><td>0 – 1</td><td>0 = equal clones, 1 = single dominant clone</td></tr>
-          </tbody>
+          <thead><tr><th>Dataset</th><th>ρ (H_TRBV)</th><th>p-value</th><th>ρ (Clonality)</th><th>N samples</th></tr></thead>
+          <tbody id="corr-tbody"></tbody>
         </table>
       </div>
     </div>
+  </div>
+</section>
 
-    <div class="card" style="margin-top:16px">
-      <h3 style="font-size:15px;font-weight:600;margin-bottom:10px">How to reproduce</h3>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Run the following in R from the repository root to re-generate all analysis outputs and re-render this report:</p>
-      <pre style="background:#1e293b;color:#e2e8f0;padding:16px;border-radius:8px;font-size:13px;font-family:'JetBrains Mono',monospace;overflow-x:auto">
-# Install dependencies (once)
-BiocManager::install("zellkonverter")
-install.packages(c("rmarkdown","DT","kableExtra","plotly",
-                   "here","dplyr","tidyr","purrr","ggplot2",
-                   "ggrepel","scales","data.table",
-                   "RColorBrewer","patchwork","pheatmap"))
-
-# Render HTML report
-rmarkdown::render("analysis/validation/tcr_diversity_report.Rmd",
-                  output_file = "analysis/validation/report.html")
-
-# Or run the plain analysis script (no HTML output)
-source("analysis/validation/run_validation_analysis.R")</pre>
-    </div>
-  </section>
+<!-- 11 · Methods -->
+<section id="methods">
+  <h2><span class="num">11</span> Interpretation Guide</h2>
+  <p class="sec-desc">How to read the results and understand each proxy's limitations.</p>
+  <div class="method-note">The TRBV proxy measures V-gene breadth/evenness — analogous to the NanoString nCounter TCR Diversity score. None of the gene-segment proxies can resolve CDR3-level clonotypes; the full four-segment paired metric (TRAV:TRAJ:TRBV:TRBJ) narrows the gap the most without full CDR3 sequencing.</div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="interp-row good"><div class="scenario">✓ High ρ (&gt;0.7)</div><div class="meaning">Proxy is a reasonable diversity surrogate in this context.</div></div>
+    <div class="interp-row warn"><div class="scenario">△ Low ρ or offset from 1:1</div><div class="meaning">Proxy breaks down; full CDR3 TCR sequencing required.</div></div>
+    <div class="interp-row bad"><div class="scenario">✗ High H_TRBV, Low H_clonotype</div><div class="meaning">Multiple TRBV genes used, but each harbours a single dominant clone (proxy overestimates diversity).</div></div>
+    <div class="interp-row bad"><div class="scenario">✗ Low H_TRBV, High H_clonotype</div><div class="meaning">Few TRBV genes used, but each harbours many distinct CDR3s (germline V-gene bias without clonal expansion).</div></div>
+    <div class="interp-row bad"><div class="scenario">✗ Red bars in failure-mode plot</div><div class="meaning">Single clone &gt;50% of cells within a TRBV family — direct failure case.</div></div>
+  </div>
+  <div class="card">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:10px">Segment resolution (weakest → strongest proxy)</h3>
+    <div class="plot-box" id="plot-resolution" style="min-height:300px"></div>
+  </div>
+</section>
 
 </main>
 
-<footer>
-  Sidiropoulos Lab · ECHO Project · Generated <span id="gen-date"></span> ·
-  Analysis: <code>R/tcr_diversity_functions.R</code>
-</footer>
+<footer>Sidiropoulos Lab · ECHO Project · <span id="gen-date"></span> · <code>R/tcr_diversity_functions.R</code></footer>
 
-<!-- ── Scripts ───────────────────────────────────────────────────────────────── -->
 <script>
-// ── Utilities ────────────────────────────────────────────────────────────────
-
+// ── Utilities ─────────────────────────────────────────────────────────────────
 document.getElementById("gen-date").textContent = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
 
 // Tab system
-document.querySelectorAll(".tabs").forEach(tabGroup => {
-  tabGroup.querySelectorAll(".tab-btn").forEach(btn => {
+document.querySelectorAll(".tabs").forEach(tg => {
+  tg.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      tabGroup.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      tg.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      const targetId = btn.dataset.tab;
-      // find sibling .tab-pane elements (next sibling .card)
-      const container = tabGroup.nextElementSibling;
-      container.querySelectorAll(".tab-pane").forEach(p => {
-        p.classList.toggle("active", p.id === targetId);
+      const tid = btn.dataset.tab;
+      tg.nextElementSibling.querySelectorAll(".tab-pane").forEach(p => {
+        p.classList.toggle("active", p.id === tid);
       });
-      // Trigger Plotly resize
-      const plotEl = document.querySelector("#" + targetId + " [id^='plot-']");
-      if (plotEl) Plotly.Plots.resize(plotEl);
+      const pel = document.querySelector("#"+tid+" [id^='plot-']");
+      if (pel) Plotly.Plots.resize(pel);
     });
   });
 });
 
-// Nav active state
+// Nav scroll spy
 const sections = document.querySelectorAll("section[id]");
 window.addEventListener("scroll", () => {
-  let cur = "";
-  sections.forEach(s => { if (window.scrollY >= s.offsetTop - 120) cur = s.id; });
-  document.querySelectorAll("nav a").forEach(a => {
-    a.classList.toggle("active", a.getAttribute("href") === "#"+cur);
-  });
-}, {passive: true});
+  let cur="";
+  sections.forEach(s => { if(window.scrollY >= s.offsetTop-120) cur=s.id; });
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active", a.getAttribute("href")==="#"+cur));
+},{passive:true});
 
+// ── Gene chips ────────────────────────────────────────────────────────────────
+const GENES = {
+  TRBV:["TRBV1","TRBV2","TRBV3-1","TRBV4-1","TRBV4-2","TRBV4-3","TRBV5-1","TRBV5-4","TRBV5-5","TRBV5-6","TRBV5-8","TRBV6-1","TRBV6-2","TRBV6-3","TRBV6-4","TRBV6-5","TRBV6-6","TRBV6-7","TRBV6-8","TRBV6-9","TRBV7-2","TRBV7-3","TRBV7-4","TRBV7-6","TRBV7-7","TRBV7-8","TRBV7-9","TRBV9","TRBV10-1","TRBV10-2","TRBV10-3","TRBV11-1","TRBV11-2","TRBV11-3","TRBV12-1","TRBV12-2","TRBV12-3","TRBV12-4","TRBV13","TRBV14","TRBV15","TRBV16","TRBV17","TRBV18","TRBV19","TRBV20-1","TRBV24-1","TRBV25-1","TRBV27","TRBV28","TRBV29-1","TRBV30"],
+  TRBJ:["TRBJ1-1","TRBJ1-2","TRBJ1-3","TRBJ1-4","TRBJ1-5","TRBJ1-6","TRBJ2-1","TRBJ2-2","TRBJ2-3","TRBJ2-4","TRBJ2-5","TRBJ2-6","TRBJ2-7"],
+  TRAV:["TRAV1-1","TRAV1-2","TRAV2","TRAV3","TRAV4","TRAV5","TRAV6","TRAV7","TRAV8-1","TRAV8-2","TRAV8-3","TRAV8-4","TRAV9-1","TRAV9-2","TRAV10","TRAV12-1","TRAV12-2","TRAV12-3","TRAV13-1","TRAV13-2","TRAV14DV4","TRAV16","TRAV17","TRAV19","TRAV20","TRAV21","TRAV22","TRAV23DV6","TRAV24","TRAV25","TRAV26-1","TRAV26-2","TRAV27","TRAV29DV5","TRAV30","TRAV34","TRAV35","TRAV36DV7","TRAV38-1","TRAV38-2DV8","TRAV39","TRAV40","TRAV41"],
+  TRAJ:["TRAJ1","TRAJ2","TRAJ3","TRAJ4","TRAJ5","TRAJ6","TRAJ7","TRAJ8","TRAJ9","TRAJ10","TRAJ11","TRAJ12","TRAJ13","TRAJ14","TRAJ15","TRAJ16","TRAJ17","TRAJ18","TRAJ19","TRAJ20","TRAJ21","TRAJ22","TRAJ23","TRAJ24","TRAJ25","TRAJ26","TRAJ27","TRAJ28","TRAJ29","TRAJ30","TRAJ31","TRAJ32","TRAJ33","TRAJ34","TRAJ35","TRAJ36","TRAJ37","TRAJ38","TRAJ39","TRAJ40","TRAJ41","TRAJ42","TRAJ43","TRAJ44","TRAJ45","TRAJ46","TRAJ47","TRAJ48","TRAJ49","TRAJ50","TRAJ51","TRAJ52","TRAJ53","TRAJ54","TRAJ55","TRAJ56","TRAJ57","TRAJ58","TRAJ59","TRAJ60","TRAJ61"]
+};
+["TRBV","TRBJ","TRAV","TRAJ"].forEach(chain => {
+  const el = document.getElementById(chain.toLowerCase()+"-chips");
+  if(el) el.innerHTML = GENES[chain].map(g => `<span class="gene-chip ${chain.toLowerCase()}">${g}</span>`).join("");
+});
 
-// ── Colour helpers ────────────────────────────────────────────────────────────
+// ── Mock data ─────────────────────────────────────────────────────────────────
+const DS_COLORS = {"blum_tissue":"#2166AC","lechner":"#D6604D","luoma":"#4DAF4A","blum_pbmc":"#9B59B6"};
+const DS_KEYS   = ["bt","le","lu","bp"];
+const DS_IDS    = ["blum_tissue","lechner","luoma","blum_pbmc"];
+const DS_NAMES  = ["Blum Tissue","Lechner","Luoma","Blum PBMC"];
+const DS_EL     = ["bt","le","lu","bp"];
 
-const DS_COLORS = { blum:"#2166AC", lechner:"#D6604D", luoma:"#4DAF4A" };
-
-// Interpolate a value in [0,1] through green → orange → red
-function heatColor(v) {
-  if (v < 0.5) {
-    const t = v * 2;
-    return `rgb(${Math.round(77+t*(255-77))},${Math.round(175+t*(127-175))},${Math.round(74+t*(0-74))})`;
-  } else {
-    const t = (v - 0.5) * 2;
-    return `rgb(${Math.round(255+t*(228-255))},${Math.round(127+t*(26-127))},0)`;
-  }
-}
-
-// ── Mock data (replace with CSV-loaded data post-analysis) ───────────────────
-//
-// Structure mirrors the output of build_summary_table() joined with
-// compute_trbv_diversity(). Replace MOCK_DATA with real CSV data once
-// the R analysis has been run.
+// Segment list with typical rho values (replace with real CSV data)
+const SEGMENTS = [
+  {label:"TRBD",       rho:0.41, color:"#f59e0b"},
+  {label:"TRAV",       rho:0.55, color:"#ec4899"},
+  {label:"TRAJ",       rho:0.58, color:"#a855f7"},
+  {label:"TRBV",       rho:0.65, color:"#3b82f6"},
+  {label:"TRBJ",       rho:0.70, color:"#22c55e"},
+  {label:"VJ_alpha",   rho:0.74, color:"#db2777"},
+  {label:"VJ_beta",    rho:0.80, color:"#2563eb"},
+  {label:"VA_VB",      rho:0.85, color:"#7c3aed"},
+  {label:"Full_paired",rho:0.91, color:"#059669"}
+];
 
 const MOCK = {
-  blum: {
-    cells: 11420, samples: 8, clones: 2341,
-    rows: [
-      {s:"S01",n:820, H_TRBV:2.81,H_clono:3.10,TRBV_clon:0.21,true_clon:0.18,top_frac:0.09},
-      {s:"S02",n:640, H_TRBV:2.54,H_clono:2.87,TRBV_clon:0.28,true_clon:0.24,top_frac:0.12},
-      {s:"S03",n:1100,H_TRBV:2.92,H_clono:3.24,TRBV_clon:0.17,true_clon:0.14,top_frac:0.07},
-      {s:"S04",n:740, H_TRBV:1.98,H_clono:2.30,TRBV_clon:0.44,true_clon:0.40,top_frac:0.23},
-      {s:"S05",n:890, H_TRBV:2.67,H_clono:2.95,TRBV_clon:0.24,true_clon:0.21,top_frac:0.10},
-      {s:"S06",n:560, H_TRBV:2.43,H_clono:2.71,TRBV_clon:0.30,true_clon:0.28,top_frac:0.14},
-      {s:"S07",n:980, H_TRBV:3.01,H_clono:3.35,TRBV_clon:0.13,true_clon:0.10,top_frac:0.06},
-      {s:"S08",n:720, H_TRBV:1.75,H_clono:1.95,TRBV_clon:0.52,true_clon:0.48,top_frac:0.29}
+  bt: {
+    cells:11420,samples:8,clones:2341,
+    rho:0.93,rho_p:0.001,pearson_r:0.91,rho_clon:0.90,
+    segs:{TRBD:0.38,TRAV:0.52,TRAJ:0.56,TRBV:0.93,TRBJ:0.73,VJ_alpha:0.71,VJ_beta:0.82,VA_VB:0.87,Full_paired:0.93},
+    rows:[
+      {s:"S01",H_TRBV:2.81,H_clono:3.10,TRBV_clon:0.21,true_clon:0.18},
+      {s:"S02",H_TRBV:2.54,H_clono:2.87,TRBV_clon:0.28,true_clon:0.24},
+      {s:"S03",H_TRBV:2.92,H_clono:3.24,TRBV_clon:0.17,true_clon:0.14},
+      {s:"S04",H_TRBV:1.98,H_clono:2.30,TRBV_clon:0.44,true_clon:0.40},
+      {s:"S05",H_TRBV:2.67,H_clono:2.95,TRBV_clon:0.24,true_clon:0.21},
+      {s:"S06",H_TRBV:2.43,H_clono:2.71,TRBV_clon:0.30,true_clon:0.28},
+      {s:"S07",H_TRBV:3.01,H_clono:3.35,TRBV_clon:0.13,true_clon:0.10},
+      {s:"S08",H_TRBV:1.75,H_clono:1.95,TRBV_clon:0.52,true_clon:0.48}
     ],
-    rho: 0.93, rho_p: 0.001, pearson_r: 0.91, pearson_p: 0.002, rho_clon: 0.90,
-    trbv_genes: ["TRBV5-1","TRBV12-3","TRBV20-1","TRBV7-2","TRBV6-5","TRBV28","TRBV3-1","Other"],
-    fail_genes: ["TRBV5-1","TRBV12-3","TRBV20-1","TRBV7-2","TRBV6-5","TRBV28","TRBV3-1","TRBV4-2","TRBV19"],
-    fail_nclones: [8,6,11,4,3,9,5,7,3],
-    fail_domfrac: [0.45,0.62,0.28,0.71,0.38,0.18,0.55,0.32,0.67]
+    fail_genes:["TRBV5-1","TRBV12-3","TRBV20-1","TRBV7-2","TRBV6-5","TRBV28","TRBV3-1","TRBV4-2","TRBV19"],
+    fail_nclones:[8,6,11,4,3,9,5,7,3],fail_domfrac:[0.45,0.62,0.28,0.71,0.38,0.18,0.55,0.32,0.67]
   },
-  lechner: {
-    cells: 4820, samples: 6, clones: 1108,
-    rows: [
-      {s:"P01",n:580, H_TRBV:2.41,H_clono:2.68,TRBV_clon:0.31,true_clon:0.28,top_frac:0.14},
-      {s:"P02",n:420, H_TRBV:1.65,H_clono:1.85,TRBV_clon:0.57,true_clon:0.53,top_frac:0.31},
-      {s:"P03",n:950, H_TRBV:2.78,H_clono:3.05,TRBV_clon:0.20,true_clon:0.17,top_frac:0.08},
-      {s:"P04",n:640, H_TRBV:2.55,H_clono:2.79,TRBV_clon:0.27,true_clon:0.24,top_frac:0.11},
-      {s:"P05",n:380, H_TRBV:1.48,H_clono:1.65,TRBV_clon:0.62,true_clon:0.59,top_frac:0.38},
-      {s:"P06",n:760, H_TRBV:2.64,H_clono:2.90,TRBV_clon:0.24,true_clon:0.21,top_frac:0.09}
+  le: {
+    cells:4820,samples:6,clones:1108,
+    rho:0.89,rho_p:0.018,pearson_r:0.87,rho_clon:0.86,
+    segs:{TRBD:0.35,TRAV:0.50,TRAJ:0.54,TRBV:0.89,TRBJ:0.70,VJ_alpha:0.68,VJ_beta:0.78,VA_VB:0.83,Full_paired:0.89},
+    rows:[
+      {s:"P01",H_TRBV:2.41,H_clono:2.68,TRBV_clon:0.31,true_clon:0.28},
+      {s:"P02",H_TRBV:1.65,H_clono:1.85,TRBV_clon:0.57,true_clon:0.53},
+      {s:"P03",H_TRBV:2.78,H_clono:3.05,TRBV_clon:0.20,true_clon:0.17},
+      {s:"P04",H_TRBV:2.55,H_clono:2.79,TRBV_clon:0.27,true_clon:0.24},
+      {s:"P05",H_TRBV:1.48,H_clono:1.65,TRBV_clon:0.62,true_clon:0.59},
+      {s:"P06",H_TRBV:2.64,H_clono:2.90,TRBV_clon:0.24,true_clon:0.21}
     ],
-    rho: 0.89, rho_p: 0.018, pearson_r: 0.87, pearson_p: 0.024, rho_clon: 0.86,
-    trbv_genes: ["TRBV12-3","TRBV5-1","TRBV20-1","TRBV28","TRBV6-5","TRBV7-2","TRBV3-1","Other"],
-    fail_genes: ["TRBV12-3","TRBV5-1","TRBV20-1","TRBV28","TRBV6-5","TRBV7-2","TRBV3-1","TRBV19"],
-    fail_nclones: [9,5,7,3,4,6,3,2],
-    fail_domfrac: [0.31,0.56,0.22,0.74,0.42,0.19,0.60,0.81]
+    fail_genes:["TRBV12-3","TRBV5-1","TRBV20-1","TRBV28","TRBV6-5","TRBV7-2","TRBV3-1","TRBV19"],
+    fail_nclones:[9,5,7,3,4,6,3,2],fail_domfrac:[0.31,0.56,0.22,0.74,0.42,0.19,0.60,0.81]
   },
-  luoma: {
-    cells: 6340, samples: 7, clones: 1674,
-    rows: [
-      {s:"UC01",n:620, H_TRBV:2.51,H_clono:2.76,TRBV_clon:0.29,true_clon:0.25,top_frac:0.12},
-      {s:"UC02",n:480, H_TRBV:1.80,H_clono:2.01,TRBV_clon:0.49,true_clon:0.45,top_frac:0.25},
-      {s:"CD01",n:890, H_TRBV:2.73,H_clono:3.02,TRBV_clon:0.21,true_clon:0.18,top_frac:0.08},
-      {s:"CD02",n:540, H_TRBV:2.38,H_clono:2.62,TRBV_clon:0.33,true_clon:0.30,top_frac:0.15},
-      {s:"HC01",n:720, H_TRBV:2.96,H_clono:3.28,TRBV_clon:0.14,true_clon:0.11,top_frac:0.06},
-      {s:"HC02",n:640, H_TRBV:2.88,H_clono:3.15,TRBV_clon:0.17,true_clon:0.14,top_frac:0.07},
-      {s:"HC03",n:380, H_TRBV:1.62,H_clono:1.45,TRBV_clon:0.59,true_clon:0.63,top_frac:0.35}
+  lu: {
+    cells:6340,samples:7,clones:1674,
+    rho:0.75,rho_p:0.049,pearson_r:0.72,rho_clon:0.71,
+    segs:{TRBD:0.30,TRAV:0.48,TRAJ:0.51,TRBV:0.75,TRBJ:0.66,VJ_alpha:0.63,VJ_beta:0.74,VA_VB:0.80,Full_paired:0.87},
+    rows:[
+      {s:"UC01",H_TRBV:2.51,H_clono:2.76,TRBV_clon:0.29,true_clon:0.25},
+      {s:"UC02",H_TRBV:1.80,H_clono:2.01,TRBV_clon:0.49,true_clon:0.45},
+      {s:"CD01",H_TRBV:2.73,H_clono:3.02,TRBV_clon:0.21,true_clon:0.18},
+      {s:"CD02",H_TRBV:2.38,H_clono:2.62,TRBV_clon:0.33,true_clon:0.30},
+      {s:"HC01",H_TRBV:2.96,H_clono:3.28,TRBV_clon:0.14,true_clon:0.11},
+      {s:"HC02",H_TRBV:2.88,H_clono:3.15,TRBV_clon:0.17,true_clon:0.14},
+      {s:"HC03",H_TRBV:1.62,H_clono:1.45,TRBV_clon:0.59,true_clon:0.63}
     ],
-    rho: 0.75, rho_p: 0.049, pearson_r: 0.72, pearson_p: 0.065, rho_clon: 0.71,
-    trbv_genes: ["TRBV20-1","TRBV5-1","TRBV12-3","TRBV6-5","TRBV28","TRBV7-2","TRBV4-2","Other"],
-    fail_genes: ["TRBV20-1","TRBV5-1","TRBV12-3","TRBV6-5","TRBV28","TRBV7-2","TRBV4-2","TRBV19","TRBV3-1"],
-    fail_nclones: [12,7,9,5,4,8,3,2,6],
-    fail_domfrac: [0.24,0.48,0.33,0.59,0.71,0.16,0.82,0.44,0.28]
+    fail_genes:["TRBV20-1","TRBV5-1","TRBV12-3","TRBV6-5","TRBV28","TRBV7-2","TRBV4-2","TRBV19","TRBV3-1"],
+    fail_nclones:[12,7,9,5,4,8,3,2,6],fail_domfrac:[0.24,0.48,0.33,0.59,0.71,0.16,0.82,0.44,0.28]
+  },
+  bp: {
+    cells:8210,samples:9,clones:3120,
+    rho:0.82,rho_p:0.007,pearson_r:0.79,rho_clon:0.80,
+    segs:{TRBD:0.42,TRAV:0.61,TRAJ:0.63,TRBV:0.82,TRBJ:0.72,VJ_alpha:0.78,VJ_beta:0.83,VA_VB:0.89,Full_paired:0.94},
+    rows:[
+      {s:"D01",H_TRBV:2.88,H_clono:3.15,TRBV_clon:0.18,true_clon:0.15},
+      {s:"D02",H_TRBV:2.31,H_clono:2.59,TRBV_clon:0.35,true_clon:0.31},
+      {s:"D03",H_TRBV:3.05,H_clono:3.38,TRBV_clon:0.12,true_clon:0.09},
+      {s:"D04",H_TRBV:1.92,H_clono:2.18,TRBV_clon:0.46,true_clon:0.42},
+      {s:"D05",H_TRBV:2.74,H_clono:3.01,TRBV_clon:0.21,true_clon:0.18},
+      {s:"D06",H_TRBV:2.58,H_clono:2.84,TRBV_clon:0.25,true_clon:0.22},
+      {s:"D07",H_TRBV:1.68,H_clono:1.88,TRBV_clon:0.54,true_clon:0.50},
+      {s:"D08",H_TRBV:2.95,H_clono:3.22,TRBV_clon:0.14,true_clon:0.12},
+      {s:"D09",H_TRBV:2.45,H_clono:2.70,TRBV_clon:0.28,true_clon:0.26}
+    ],
+    fail_genes:["TRBV5-1","TRBV20-1","TRBV12-3","TRBV28","TRBV6-5","TRBV7-2","TRBV4-2","TRBV19"],
+    fail_nclones:[10,8,12,5,6,7,4,3],fail_domfrac:[0.35,0.28,0.19,0.58,0.43,0.22,0.72,0.61]
   }
 };
 
-// ── Populate overview stats ───────────────────────────────────────────────────
-
-["blum","lechner","luoma"].forEach(ds => {
-  const d = MOCK[ds];
-  document.getElementById(ds+"-cells").textContent   = d.cells.toLocaleString();
-  document.getElementById(ds+"-samples").textContent = d.samples;
-  document.getElementById(ds+"-clones").textContent  = d.clones.toLocaleString();
-  const rhoEl = document.getElementById(ds+"-rho");
-  rhoEl.textContent = d.rho.toFixed(2);
-  rhoEl.style.color = d.rho >= 0.8 ? "#065f46" : d.rho >= 0.6 ? "#92400e" : "#991b1b";
+// ── Overview stats ────────────────────────────────────────────────────────────
+const ID_MAP = {bt:"bt",le:"le",lu:"lu",bp:"bp"};
+DS_KEYS.forEach((k,i) => {
+  const d = MOCK[k];
+  document.getElementById(k+"-cells").textContent   = d.cells.toLocaleString();
+  document.getElementById(k+"-samples").textContent = d.samples;
+  document.getElementById(k+"-clones").textContent  = d.clones.toLocaleString();
+  const re = document.getElementById(k+"-rho");
+  re.textContent = d.rho.toFixed(2);
+  re.style.color = d.rho>=.8?"#065f46":d.rho>=.6?"#92400e":"#991b1b";
 });
 
 // ── Correlation table ─────────────────────────────────────────────────────────
-
 const tbody = document.getElementById("corr-tbody");
-tbody.innerHTML = "";
-["blum","lechner","luoma"].forEach(ds => {
-  const d = MOCK[ds];
-  const sig = d.rho_p < 0.05;
-  const cls = d.rho >= 0.8 ? "rho-high" : d.rho >= 0.6 ? "rho-medium" : "rho-low";
+DS_KEYS.forEach((k,i) => {
+  const d = MOCK[k]; const sig = d.rho_p < 0.05;
+  const cls = d.rho>=.8?"rho-high":d.rho>=.6?"rho-med":"rho-low";
   tbody.innerHTML += `<tr>
-    <td style="font-weight:600;text-transform:capitalize">${ds}</td>
+    <td style="font-weight:600">${DS_NAMES[i]}</td>
     <td><span class="rho-badge ${cls}">${d.rho.toFixed(3)}${sig?"*":""}</span></td>
     <td style="color:var(--muted);font-size:12px">${d.rho_p.toFixed(4)}</td>
-    <td>${d.pearson_r.toFixed(3)}</td>
     <td>${d.rho_clon.toFixed(3)}</td>
     <td>${d.samples}</td>
   </tr>`;
 });
 
-// ── Bland-Altman helper ───────────────────────────────────────────────────────
-
-function blandAltman(rows, color, title) {
-  const means = rows.map(r => (r.H_TRBV + r.H_clono) / 2);
-  const diffs = rows.map(r => r.H_TRBV - r.H_clono);
-  const mean_diff = diffs.reduce((a,b)=>a+b,0)/diffs.length;
-  const sd = Math.sqrt(diffs.map(d=>(d-mean_diff)**2).reduce((a,b)=>a+b,0)/(diffs.length-1));
-  const lo = mean_diff - 1.96*sd, hi = mean_diff + 1.96*sd;
-  const xr = [Math.min(...means)-0.1, Math.max(...means)+0.1];
-  return {
-    data:[
-      {x:means, y:diffs, mode:"markers+text", text:rows.map(r=>r.s),
-       textposition:"top center", textfont:{size:10},
-       marker:{color:color,size:9,opacity:.85}, type:"scatter", name:"Sample"},
-      {x:xr, y:[mean_diff,mean_diff], mode:"lines",
-       line:{color:"royalblue",width:2}, name:`Mean (${mean_diff.toFixed(3)})`},
-      {x:xr, y:[hi,hi], mode:"lines",
-       line:{color:"red",width:1.5,dash:"dash"}, name:`+1.96 SD (${hi.toFixed(3)})`},
-      {x:xr, y:[lo,lo], mode:"lines",
-       line:{color:"red",width:1.5,dash:"dash"}, name:`-1.96 SD (${lo.toFixed(3)})`},
-      {x:xr, y:[0,0], mode:"lines",
-       line:{color:"grey",width:1,dash:"dot"}, showlegend:false}
-    ],
-    layout:{
-      title:{text:title,font:{size:13}},
-      xaxis:{title:"Mean of H_TRBV and H_clonotype"},
-      yaxis:{title:"H_TRBV − H_clonotype"},
-      legend:{orientation:"h",y:-0.2},
-      margin:{t:50,b:80},
-      plot_bgcolor:"#fafafa", paper_bgcolor:"white"
-    }
-  };
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function spearman(x,y){
+  const rank=arr=>{const s=[...arr].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v);const r=new Array(arr.length);s.forEach((s,rank)=>r[s.i]=rank+1);return r};
+  const rx=rank(x),ry=rank(y),n=x.length,d2=rx.map((r,i)=>(r-ry[i])**2).reduce((a,b)=>a+b,0);
+  return 1-(6*d2)/(n*(n*n-1));
+}
+function heatColor(v){
+  if(v<.5){const t=v*2;return`rgb(${Math.round(77+t*(255-77))},${Math.round(175+t*(127-175))},${Math.round(74+t*(0-74))})`}
+  const t=(v-.5)*2;return`rgb(${Math.round(255+t*(228-255))},${Math.round(127+t*(26-127))},0)`;
+}
+function linFit(xs,ys){
+  const n=xs.length,xm=xs.reduce((a,b)=>a+b,0)/n,ym=ys.reduce((a,b)=>a+b,0)/n;
+  const slope=xs.map((x,i)=>(x-xm)*(ys[i]-ym)).reduce((a,b)=>a+b,0)/xs.map(x=>(x-xm)**2).reduce((a,b)=>a+b,0);
+  return{slope,int:ym-slope*xm};
 }
 
-// ── Scatter helper ────────────────────────────────────────────────────────────
-
-function scatterPlot(rows, color, title, xKey="H_TRBV", yKey="H_clono") {
-  const xs = rows.map(r=>r[xKey]), ys = rows.map(r=>r[yKey]);
-  const all = [...xs,...ys], mn = Math.min(...all)*0.9, mx = Math.max(...all)*1.05;
-  // simple linear fit
-  const n = xs.length;
-  const xm = xs.reduce((a,b)=>a+b,0)/n, ym = ys.reduce((a,b)=>a+b,0)/n;
-  const slope = xs.map((x,i)=>(x-xm)*(ys[i]-ym)).reduce((a,b)=>a+b,0) /
-                xs.map(x=>(x-xm)**2).reduce((a,b)=>a+b,0);
-  const int   = ym - slope*xm;
-  const lx = [mn, mx];
-  const sp = spearman(xs,ys);
-  return {
-    data:[
-      {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},
-       showlegend:false, hoverinfo:"none"},
-      {x:lx,y:lx.map(x=>slope*x+int),mode:"lines",
-       line:{color:"grey",width:1.5,dash:"dash"},name:"Linear fit",opacity:.6},
-      {x:xs,y:ys,mode:"markers+text",text:rows.map(r=>r.s),
-       textposition:"top center",textfont:{size:9},
-       marker:{color:color,size:10,opacity:.85},type:"scatter",name:"Sample"}
-    ],
-    layout:{
-      title:{text:`${title}<br><sub>Spearman ρ = ${sp.toFixed(3)}</sub>`,font:{size:13}},
-      xaxis:{title:xKey==="H_TRBV" ? "H<sub>TRBV</sub> (proxy)" : "TRBV clonality proxy",
-             range:[mn,mx]},
-      yaxis:{title:yKey==="H_clono" ? "H<sub>clonotype</sub> (true)" : "True clonality",
-             range:[mn,mx]},
-      margin:{t:60,b:60},
-      plot_bgcolor:"#fafafa", paper_bgcolor:"white"
-    }
-  };
+function scatterPlot(rows,color,title,xk="H_TRBV",yk="H_clono"){
+  const xs=rows.map(r=>r[xk]),ys=rows.map(r=>r[yk]);
+  const all=[...xs,...ys],mn=Math.min(...all)*.9,mx=Math.max(...all)*1.05;
+  const{slope,int}=linFit(xs,ys);
+  const rho=spearman(xs,ys);
+  return{data:[
+    {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"},
+    {x:[mn,mx],y:[mn,mx].map(x=>slope*x+int),mode:"lines",line:{color:"grey",width:1.5,dash:"dash"},name:"Linear fit",opacity:.6},
+    {x:xs,y:ys,mode:"markers+text",text:rows.map(r=>r.s),textposition:"top center",textfont:{size:9},marker:{color:color,size:10,opacity:.85},type:"scatter",name:"Sample"}
+  ],layout:{
+    title:{text:`${title}<br><sub>Spearman ρ = ${rho.toFixed(3)}</sub>`,font:{size:13}},
+    xaxis:{title:xk.includes("TRBV")?"H<sub>TRBV</sub> (proxy)":"TRBV clonality proxy",range:[mn,mx]},
+    yaxis:{title:yk.includes("clono")?"H<sub>clonotype</sub> (true)":"True clonality",range:[mn,mx]},
+    margin:{t:60,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }};
 }
 
-// ── Spearman rank correlation ─────────────────────────────────────────────────
-
-function spearman(x,y) {
-  const rank = arr => {
-    const sorted = [...arr].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v);
-    const r = new Array(arr.length);
-    sorted.forEach((s,rank)=>{ r[s.i]=rank+1; });
-    return r;
-  };
-  const rx = rank(x), ry = rank(y);
-  const n = x.length;
-  const d2 = rx.map((r,i)=>(r-ry[i])**2).reduce((a,b)=>a+b,0);
-  return 1 - (6*d2)/(n*(n*n-1));
+function blandAltman(rows,color,title){
+  const means=rows.map(r=>(r.H_TRBV+r.H_clono)/2),diffs=rows.map(r=>r.H_TRBV-r.H_clono);
+  const md=diffs.reduce((a,b)=>a+b,0)/diffs.length;
+  const sd=Math.sqrt(diffs.map(d=>(d-md)**2).reduce((a,b)=>a+b,0)/(diffs.length-1));
+  const xr=[Math.min(...means)-.1,Math.max(...means)+.1];
+  return{data:[
+    {x:means,y:diffs,mode:"markers+text",text:rows.map(r=>r.s),textposition:"top center",textfont:{size:9},marker:{color,size:9,opacity:.85},type:"scatter",name:"Sample"},
+    {x:xr,y:[md,md],mode:"lines",line:{color:"royalblue",width:2},name:`Mean (${md.toFixed(3)})`},
+    {x:xr,y:[md+1.96*sd,md+1.96*sd],mode:"lines",line:{color:"red",width:1.5,dash:"dash"},name:"+1.96 SD"},
+    {x:xr,y:[md-1.96*sd,md-1.96*sd],mode:"lines",line:{color:"red",width:1.5,dash:"dash"},name:"-1.96 SD"},
+    {x:xr,y:[0,0],mode:"lines",line:{color:"grey",width:1,dash:"dot"},showlegend:false}
+  ],layout:{
+    title:{text:title,font:{size:13}},
+    xaxis:{title:"Mean of H_TRBV and H_clonotype"},
+    yaxis:{title:"H_TRBV − H_clonotype"},
+    legend:{orientation:"h",y:-.2},margin:{t:50,b:80},
+    plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }};
 }
 
-// ── TRBV stacked bar helper ───────────────────────────────────────────────────
+const TRBV_GENES_TOP=["TRBV5-1","TRBV12-3","TRBV20-1","TRBV7-2","TRBV6-5","TRBV28","TRBV3-1","TRBV19","TRBV4-2","Other"];
+const TRAV_GENES_TOP=["TRAV12-2","TRAV1-2","TRAV26-1","TRAV5","TRAV20","TRAV41","TRAV9-2","TRAV38-2DV8","TRAV13-1","Other"];
+const TRAJ_GENES_TOP=["TRAJ33","TRAJ20","TRAJ49","TRAJ6","TRAJ52","TRAJ31","TRAJ45","TRAJ17","TRAJ23","Other"];
+const PALETTE=["#1f78b4","#33a02c","#e31a1c","#ff7f00","#6a3d9a","#b15928","#a6cee3","#b2df8a","#fb9a99","#fdbf6f","grey"];
 
-const TRBV_PALETTE = [
-  "#1f78b4","#33a02c","#e31a1c","#ff7f00","#6a3d9a",
-  "#b15928","#a6cee3","#b2df8a","#fb9a99","#fdbf6f",
-  "#cab2d6","#ffff99","#8dd3c7","#bebada","#fb8072",
-  "#80b1d3","#fdb462","#b3de69","#fccde5","grey"
-];
-
-function trbvBar(ds_data, ds) {
-  const rows   = ds_data.rows;
-  const samples= rows.map(r=>r.s);
-  const genes  = ds_data.trbv_genes;
-
-  // Fake proportions (uniform for demo)
-  const traces = genes.map((g,i) => {
-    const frac = rows.map(r => {
-      if (g === "Other") return Math.random()*0.05+0.03;
-      return (Math.random()*0.12+0.03);
-    });
-    // normalise so each sample sums to 1
-    return {
-      x:samples, y:frac, name:g, type:"bar",
-      marker:{color: TRBV_PALETTE[i % TRBV_PALETTE.length]},
-      hovertemplate: `%{x}<br>${g}: %{y:.1%}<extra></extra>`
-    };
-  });
-
-  return {
-    data: traces,
-    layout:{
-      barmode:"stack",
-      title:{text:`TRBV Gene Usage — ${ds[0].toUpperCase()+ds.slice(1)}`,font:{size:13}},
-      xaxis:{title:"Sample",tickangle:-35},
-      yaxis:{title:"Proportion of T cells",tickformat:".0%"},
-      legend:{orientation:"v",x:1.02,font:{size:10}},
-      margin:{t:50,b:80,r:140},
-      plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-    }
-  };
+function geneBar(genes,samples,title,color_class){
+  const traces=genes.map((g,i)=>({
+    x:samples,y:samples.map(()=>Math.random()*.12+.03+(g==="Other"?.02:0)),
+    name:g,type:"bar",marker:{color:PALETTE[i%PALETTE.length]},
+    hovertemplate:`%{x}<br>${g}: %{y:.1%}<extra></extra>`
+  }));
+  return{data:traces,layout:{
+    barmode:"stack",title:{text:title,font:{size:13}},
+    xaxis:{title:"Sample",tickangle:-35},yaxis:{title:"Proportion of T cells",tickformat:".0%"},
+    legend:{orientation:"v",x:1.02,font:{size:10}},margin:{t:50,b:80,r:140},
+    plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }};
 }
 
-// ── Failure mode helper ───────────────────────────────────────────────────────
-
-function failurePlot(ds_data, ds) {
-  const genes     = ds_data.fail_genes;
-  const nClones   = ds_data.fail_nclones;
-  const domFrac   = ds_data.fail_domfrac;
-  const colors    = domFrac.map(heatColor);
-
-  return {
-    data:[{
-      y: genes,
-      x: nClones,
-      type:"bar",
-      orientation:"h",
-      marker:{ color:colors },
-      text: domFrac.map(f=>`Dom. clone: ${(f*100).toFixed(0)}%`),
-      textposition:"outside",
-      hovertemplate: "%{y}<br>Clonotypes: %{x}<br>%{text}<extra></extra>"
-    }],
-    layout:{
-      title:{text:`Within-TRBV Clonotype Diversity — ${ds[0].toUpperCase()+ds.slice(1)}<br>`+
-                  `<sub style='color:#c0392b'>Red = single clone >50% of cells (failure mode)</sub>`,font:{size:13}},
-      xaxis:{title:"Unique clonotypes within TRBV gene"},
-      yaxis:{autorange:"reversed"},
-      margin:{t:60,b:60,l:110},
-      plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-    }
-  };
+function failurePlot(d,title){
+  return{data:[{
+    y:d.fail_genes,x:d.fail_nclones,type:"bar",orientation:"h",
+    marker:{color:d.fail_domfrac.map(heatColor)},
+    text:d.fail_domfrac.map(f=>`Dom: ${(f*100).toFixed(0)}%`),textposition:"outside",
+    hovertemplate:"%{y}<br>Clonotypes: %{x}<br>%{text}<extra></extra>"
+  }],layout:{
+    title:{text:title,font:{size:13}},
+    xaxis:{title:"Unique clonotypes within TRBV gene"},yaxis:{autorange:"reversed"},
+    margin:{t:60,b:60,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }};
 }
 
-// ── Correlation bar chart ─────────────────────────────────────────────────────
-
-(function(){
-  const datasets = ["blum","lechner","luoma"];
-  const rhos     = datasets.map(d => MOCK[d].rho);
-  const colors   = rhos.map(r => r >= 0.8 ? "#2166AC" : r >= 0.6 ? "#F59E0B" : "#EF4444");
-  const sig      = datasets.map(d => MOCK[d].rho_p < 0.05);
-
-  Plotly.newPlot("plot-rho-bar", [{
-    x: rhos,
-    y: datasets.map(d => d[0].toUpperCase()+d.slice(1)),
-    type:"bar", orientation:"h",
-    marker:{ color:colors },
-    text: rhos.map((r,i)=>`ρ = ${r.toFixed(2)}${sig[i]?"*":""}`),
-    textposition:"outside",
+function segBar(segs,title,color){
+  const labels=Object.keys(segs),rhos=Object.values(segs);
+  return{data:[{
+    x:rhos,y:labels,type:"bar",orientation:"h",
+    marker:{color:labels.map(l=>SEGMENTS.find(s=>s.label===l)?.color||color)},
+    text:rhos.map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
     hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
-  }], {
-    title:{text:"H<sub>TRBV</sub> vs H<sub>clonotype</sub> — Spearman ρ by Dataset<br><sub>* p < 0.05</sub>",font:{size:13}},
-    xaxis:{title:"Spearman ρ",range:[0,1.15]},
-    yaxis:{},
-    margin:{t:60,b:50,l:90},
-    plot_bgcolor:"#fafafa", paper_bgcolor:"white"
-  }, {responsive:true});
-})();
+  }],layout:{
+    title:{text:title,font:{size:13}},
+    xaxis:{title:"Spearman ρ with H_clonotype",range:[0,1.1]},yaxis:{},
+    margin:{t:50,b:50,l:100},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }};
+}
 
-// ── Per-dataset scatter plots ─────────────────────────────────────────────────
+// ── Render all plots ──────────────────────────────────────────────────────────
+const cfg={responsive:true};
 
-["blum","lechner","luoma"].forEach(ds => {
-  const d = MOCK[ds];
-  const sc = scatterPlot(d.rows, DS_COLORS[ds], `H<sub>TRBV</sub> vs H<sub>clonotype</sub> — ${ds[0].toUpperCase()+ds.slice(1)}`);
-  Plotly.newPlot(`plot-scatter-${ds}`, sc.data, sc.layout, {responsive:true});
+DS_KEYS.forEach((k,i) => {
+  const d=MOCK[k], col=Object.values(DS_COLORS)[i], name=DS_NAMES[i], samps=d.rows.map(r=>r.s);
 
-  const cn = scatterPlot(d.rows, DS_COLORS[ds], `Clonality proxy vs true clonality — ${ds[0].toUpperCase()+ds.slice(1)}`, "TRBV_clon","true_clon");
-  Plotly.newPlot(`plot-clon-${ds}`, cn.data, cn.layout, {responsive:true});
+  // TRBV stacked bar
+  Plotly.newPlot(`plot-trbv-${k}`, geneBar(TRBV_GENES_TOP,samps,`TRBV Usage — ${name}`).data,
+    geneBar(TRBV_GENES_TOP,samps,`TRBV Usage — ${name}`).layout, cfg);
 
-  const ba = blandAltman(d.rows, DS_COLORS[ds], `Bland-Altman — ${ds[0].toUpperCase()+ds.slice(1)}`);
-  Plotly.newPlot(`plot-ba-${ds}`, ba.data, ba.layout, {responsive:true});
+  // TRAV bar
+  Plotly.newPlot(`plot-trav-${k}`, geneBar(TRAV_GENES_TOP,samps,`TRAV Usage — ${name}`).data,
+    geneBar(TRAV_GENES_TOP,samps,`TRAV Usage — ${name}`).layout, cfg);
 
-  const tb = trbvBar(d, ds);
-  Plotly.newPlot(`plot-trbv-${ds}`, tb.data, tb.layout, {responsive:true});
+  // TRAJ bar
+  Plotly.newPlot(`plot-traj-${k}`, geneBar(TRAJ_GENES_TOP,samps,`TRAJ Usage — ${name}`).data,
+    geneBar(TRAJ_GENES_TOP,samps,`TRAJ Usage — ${name}`).layout, cfg);
 
-  const fl = failurePlot(d, ds);
-  Plotly.newPlot(`plot-fail-${ds}`, fl.data, fl.layout, {responsive:true});
+  // Segment correlation bars (per dataset)
+  const sb=segBar(d.segs,`TCR Segment Correlations — ${name}`,col);
+  Plotly.newPlot(`plot-seg-${k}`,sb.data,sb.layout,cfg);
+
+  // Scatter
+  const sc=scatterPlot(d.rows,col,`H<sub>TRBV</sub> vs H<sub>clonotype</sub> — ${name}`);
+  Plotly.newPlot(`plot-sc-${k}`,sc.data,sc.layout,cfg);
+
+  // Clonality scatter
+  const cn=scatterPlot(d.rows,col,`Clonality proxy vs true — ${name}`,"TRBV_clon","true_clon");
+  Plotly.newPlot(`plot-cn-${k}`,cn.data,cn.layout,cfg);
+
+  // Bland-Altman
+  const ba=blandAltman(d.rows,col,`Bland-Altman — ${name}`);
+  Plotly.newPlot(`plot-ba-${k}`,ba.data,ba.layout,cfg);
+
+  // Failure mode
+  const fa=failurePlot(d,`Within-TRBV Clonotype Diversity — ${name}`);
+  Plotly.newPlot(`plot-fa-${k}`,fa.data,fa.layout,cfg);
 });
 
-// ── All-datasets scatter ──────────────────────────────────────────────────────
-
+// ── All-datasets segment correlation (mean ρ) ─────────────────────────────────
 (function(){
-  const traces = ["blum","lechner","luoma"].map(ds => {
-    const d = MOCK[ds];
-    return {
-      x:d.rows.map(r=>r.H_TRBV), y:d.rows.map(r=>r.H_clono),
-      mode:"markers+text", text:d.rows.map(r=>r.s),
-      textposition:"top center", textfont:{size:9},
-      marker:{color:DS_COLORS[ds],size:10,opacity:.85},
-      name:ds[0].toUpperCase()+ds.slice(1), type:"scatter"
-    };
+  const segLabels=SEGMENTS.map(s=>s.label);
+  const meanRhos=segLabels.map(l=>{
+    const rhos=DS_KEYS.map(k=>MOCK[k].segs[l]||0);
+    return rhos.reduce((a,b)=>a+b,0)/rhos.length;
   });
-  const allX = traces.flatMap(t=>t.x), allY = traces.flatMap(t=>t.y);
-  const mn = Math.min(...allX,...allY)*0.9, mx = Math.max(...allX,...allY)*1.05;
-  traces.unshift({x:[mn,mx],y:[mn,mx],mode:"lines",
-    line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"});
+  Plotly.newPlot("plot-seg-all",[{
+    x:meanRhos,y:segLabels,type:"bar",orientation:"h",
+    marker:{color:SEGMENTS.map(s=>s.color)},
+    text:meanRhos.map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
+    hovertemplate:"%{y}: mean ρ = %{x:.3f}<extra></extra>"
+  }],{
+    title:{text:"Mean Spearman ρ with H<sub>clonotype</sub> — All Datasets",font:{size:13}},
+    xaxis:{title:"Mean Spearman ρ",range:[0,1.1]},yaxis:{},
+    margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+})();
 
-  const allXd = MOCK.blum.rows.map(r=>r.H_TRBV).concat(
-                MOCK.lechner.rows.map(r=>r.H_TRBV),
-                MOCK.luoma.rows.map(r=>r.H_TRBV));
-  const allYd = MOCK.blum.rows.map(r=>r.H_clono).concat(
-                MOCK.lechner.rows.map(r=>r.H_clono),
-                MOCK.luoma.rows.map(r=>r.H_clono));
-  const rho = spearman(allXd, allYd);
-
-  Plotly.newPlot("plot-scatter-all", traces, {
-    title:{text:`TRBV Proxy vs True Clonotype Diversity — All Datasets<br><sub>Overall Spearman ρ = ${rho.toFixed(3)}</sub>`,font:{size:13}},
-    xaxis:{title:"H<sub>TRBV</sub> (TRBV usage diversity proxy)",range:[mn,mx]},
-    yaxis:{title:"H<sub>clonotype</sub> (true CDR3-level diversity)",range:[mn,mx]},
-    legend:{orientation:"h",y:-0.15},
-    margin:{t:70,b:80},
+// ── All-datasets scatter ──────────────────────────────────────────────────────
+(function(){
+  const traces=DS_KEYS.map((k,i)=>({
+    x:MOCK[k].rows.map(r=>r.H_TRBV),y:MOCK[k].rows.map(r=>r.H_clono),
+    mode:"markers+text",text:MOCK[k].rows.map(r=>r.s),
+    textposition:"top center",textfont:{size:9},
+    marker:{color:Object.values(DS_COLORS)[i],size:10,opacity:.85},
+    name:DS_NAMES[i],type:"scatter"
+  }));
+  const allX=traces.flatMap(t=>t.x),allY=traces.flatMap(t=>t.y);
+  const mn=Math.min(...allX,...allY)*.9,mx=Math.max(...allX,...allY)*1.05;
+  traces.unshift({x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"});
+  const rho=spearman(allX,allY);
+  Plotly.newPlot("plot-sc-all",traces,{
+    title:{text:`TRBV Proxy vs True Diversity — All Datasets<br><sub>Overall Spearman ρ = ${rho.toFixed(3)}</sub>`,font:{size:13}},
+    xaxis:{title:"H<sub>TRBV</sub> (proxy)",range:[mn,mx]},
+    yaxis:{title:"H<sub>clonotype</sub> (true)",range:[mn,mx]},
+    legend:{orientation:"h",y:-.15},margin:{t:70,b:80},
     plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },{responsive:true});
+  },cfg);
 })();
 
 // ── All-datasets clonality scatter ────────────────────────────────────────────
-
 (function(){
-  const traces = ["blum","lechner","luoma"].map(ds => {
-    const d = MOCK[ds];
-    return {
-      x:d.rows.map(r=>r.TRBV_clon), y:d.rows.map(r=>r.true_clon),
-      mode:"markers+text", text:d.rows.map(r=>r.s),
-      textposition:"top center", textfont:{size:9},
-      marker:{color:DS_COLORS[ds],size:10,opacity:.85},
-      name:ds[0].toUpperCase()+ds.slice(1), type:"scatter"
-    };
-  });
-  traces.unshift({x:[0,1],y:[0,1],mode:"lines",
-    line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"});
-
-  Plotly.newPlot("plot-clon-all", traces, {
+  const traces=DS_KEYS.map((k,i)=>({
+    x:MOCK[k].rows.map(r=>r.TRBV_clon),y:MOCK[k].rows.map(r=>r.true_clon),
+    mode:"markers+text",text:MOCK[k].rows.map(r=>r.s),
+    textposition:"top center",textfont:{size:9},
+    marker:{color:Object.values(DS_COLORS)[i],size:10,opacity:.85},
+    name:DS_NAMES[i],type:"scatter"
+  }));
+  traces.unshift({x:[0,1],y:[0,1],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false});
+  Plotly.newPlot("plot-cn-all",traces,{
     title:{text:"Clonality Proxy vs True Clonality — All Datasets",font:{size:13}},
-    xaxis:{title:"TRBV clonality proxy (1 − H_norm_TRBV)",range:[0,1]},
-    yaxis:{title:"True clonality (1 − H_norm_clonotype)",range:[0,1]},
-    legend:{orientation:"h",y:-0.15},
-    margin:{t:60,b:80},
+    xaxis:{title:"TRBV clonality proxy",range:[0,1]},
+    yaxis:{title:"True clonality",range:[0,1]},
+    legend:{orientation:"h",y:-.15},margin:{t:60,b:80},
     plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },{responsive:true});
+  },cfg);
 })();
 
+// ── Cross-dataset rho bar ─────────────────────────────────────────────────────
+(function(){
+  const rhos=DS_KEYS.map(k=>MOCK[k].rho);
+  const sig=DS_KEYS.map(k=>MOCK[k].rho_p<.05);
+  Plotly.newPlot("plot-rho-bar",[{
+    x:rhos,y:DS_NAMES,type:"bar",orientation:"h",
+    marker:{color:Object.values(DS_COLORS)},
+    text:rhos.map((r,i)=>`ρ = ${r.toFixed(2)}${sig[i]?"*":""}`),textposition:"outside",
+    hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
+  }],{
+    title:{text:"H<sub>TRBV</sub> vs H<sub>clonotype</sub> — Spearman ρ<br><sub>* p &lt; 0.05</sub>",font:{size:13}},
+    xaxis:{title:"Spearman ρ",range:[0,1.15]},yaxis:{},
+    margin:{t:60,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+})();
+
+// ── Resolution ladder ─────────────────────────────────────────────────────────
+(function(){
+  const labels=SEGMENTS.map(s=>s.label);
+  const meanRhos=SEGMENTS.map(s=>{
+    const vals=DS_KEYS.map(k=>MOCK[k].segs[s.label]||0);
+    return vals.reduce((a,b)=>a+b,0)/vals.length;
+  });
+  Plotly.newPlot("plot-resolution",[{
+    x:meanRhos,y:labels,type:"scatter",mode:"markers+lines",
+    marker:{color:SEGMENTS.map(s=>s.color),size:14,symbol:"circle"},
+    line:{color:"#94a3b8",width:2},
+    text:meanRhos.map(r=>`ρ = ${r.toFixed(2)}`),
+    textposition:"middle right",hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
+  }],{
+    title:{text:"TCR Segment Resolution Ladder (weakest → strongest proxy)",font:{size:13}},
+    xaxis:{title:"Mean Spearman ρ with H_clonotype",range:[0,1.05]},
+    yaxis:{},margin:{t:50,b:50,l:110},
+    plot_bgcolor:"#fafafa",paper_bgcolor:"white",
+    shapes:[{type:"line",x0:.5,x1:.5,y0:-.5,y1:labels.length-.5,
+             line:{color:"#f59e0b",width:1.5,dash:"dash"},opacity:.5}],
+    annotations:[{x:.5,y:labels.length-.3,text:"ρ = 0.5 threshold",
+                  showarrow:false,font:{size:11,color:"#92400e"}}]
+  },cfg);
+})();
 </script>
 </body>
 </html>

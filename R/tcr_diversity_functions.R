@@ -2269,3 +2269,290 @@ plot_combined_rank_score <- function(joined,
     theme_bw(base_size = 12) +
     theme(legend.position = "right")
 }
+
+
+# =============================================================================
+# SECTION 12: CANONICAL TCR GENE LISTS AND FULL-CHAIN DIVERSITY
+# =============================================================================
+#
+# Extends the TRBV-only proxy to all canonical human TCR gene segments:
+# TRBV, TRBD, TRBJ (beta chain) and TRAV, TRAJ (alpha chain), plus paired
+# alpha-beta combination metrics.
+# =============================================================================
+
+# ── Canonical gene lists (IMGT human) ────────────────────────────────────────
+
+TCR_GENES <- list(
+
+  TRBV = c(
+    "TRBV1","TRBV2","TRBV3-1","TRBV4-1","TRBV4-2","TRBV4-3",
+    "TRBV5-1","TRBV5-4","TRBV5-5","TRBV5-6","TRBV5-8",
+    "TRBV6-1","TRBV6-2","TRBV6-3","TRBV6-4","TRBV6-5","TRBV6-6","TRBV6-7","TRBV6-8","TRBV6-9",
+    "TRBV7-2","TRBV7-3","TRBV7-4","TRBV7-6","TRBV7-7","TRBV7-8","TRBV7-9",
+    "TRBV9","TRBV10-1","TRBV10-2","TRBV10-3",
+    "TRBV11-1","TRBV11-2","TRBV11-3",
+    "TRBV12-1","TRBV12-2","TRBV12-3","TRBV12-4",
+    "TRBV13","TRBV14","TRBV15","TRBV16","TRBV17","TRBV18","TRBV19","TRBV20-1",
+    "TRBV24-1","TRBV25-1","TRBV27","TRBV28","TRBV29-1","TRBV30"
+  ),
+
+  TRBD = c("TRBD1","TRBD2"),
+
+  TRBJ = c(
+    "TRBJ1-1","TRBJ1-2","TRBJ1-3","TRBJ1-4","TRBJ1-5","TRBJ1-6",
+    "TRBJ2-1","TRBJ2-2","TRBJ2-3","TRBJ2-4","TRBJ2-5","TRBJ2-6","TRBJ2-7"
+  ),
+
+  TRAV = c(
+    "TRAV1-1","TRAV1-2","TRAV2","TRAV3","TRAV4","TRAV5","TRAV6","TRAV7",
+    "TRAV8-1","TRAV8-2","TRAV8-3","TRAV8-4","TRAV9-1","TRAV9-2","TRAV10",
+    "TRAV12-1","TRAV12-2","TRAV12-3","TRAV13-1","TRAV13-2","TRAV14DV4",
+    "TRAV16","TRAV17","TRAV19","TRAV20","TRAV21","TRAV22","TRAV23DV6",
+    "TRAV24","TRAV25","TRAV26-1","TRAV26-2","TRAV27","TRAV29DV5","TRAV30",
+    "TRAV34","TRAV35","TRAV36DV7","TRAV38-1","TRAV38-2DV8","TRAV39","TRAV40","TRAV41"
+  ),
+
+  TRAJ = c(
+    "TRAJ1","TRAJ2","TRAJ3","TRAJ4","TRAJ5","TRAJ6","TRAJ7","TRAJ8","TRAJ9","TRAJ10",
+    "TRAJ11","TRAJ12","TRAJ13","TRAJ14","TRAJ15","TRAJ16","TRAJ17","TRAJ18","TRAJ19","TRAJ20",
+    "TRAJ21","TRAJ22","TRAJ23","TRAJ24","TRAJ25","TRAJ26","TRAJ27","TRAJ28","TRAJ29","TRAJ30",
+    "TRAJ31","TRAJ32","TRAJ33","TRAJ34","TRAJ35","TRAJ36","TRAJ37","TRAJ38","TRAJ39","TRAJ40",
+    "TRAJ41","TRAJ42","TRAJ43","TRAJ44","TRAJ45","TRAJ46","TRAJ47","TRAJ48","TRAJ49","TRAJ50",
+    "TRAJ51","TRAJ52","TRAJ53","TRAJ54","TRAJ55","TRAJ56","TRAJ57","TRAJ58","TRAJ59","TRAJ60",
+    "TRAJ61"
+  )
+)
+
+#' Standardise gene calls against canonical IMGT gene lists
+#'
+#' Strips allele suffixes (*01), trims whitespace, and optionally replaces
+#' unrecognised calls with NA.
+#'
+#' @param x              Character vector of raw gene calls.
+#' @param chain          One of "TRBV","TRBD","TRBJ","TRAV","TRAJ" (or NULL).
+#' @param na_if_unknown  If TRUE, replace unrecognised calls with NA.
+#' @return  Cleaned character vector.
+standardise_gene_calls <- function(x, chain = NULL, na_if_unknown = FALSE) {
+  x <- str_trim(as.character(x))
+  x <- sub("\\*\\d+$", "", x)
+  x[x %in% c("", "None", "none", "nan", "NaN", "NA", "N/A", "na")] <- NA_character_
+  if (!is.null(chain) && na_if_unknown && chain %in% names(TCR_GENES)) {
+    x[!is.na(x) & !x %in% TCR_GENES[[chain]]] <- NA_character_
+  }
+  x
+}
+
+#' Add standardised TRAV/TRAJ columns and all paired combo columns
+#'
+#' Adds: trav_gene_std, traj_gene_std, vj_alpha (TRAV:TRAJ),
+#' vavb_combo (TRAV:TRBV), full_vj_combo (TRAV:TRAJ:TRBV:TRBJ).
+#'
+#' @param metadata       Data frame. Needs trav_gene and traj_gene columns.
+#' @param na_if_unknown  If TRUE, replace off-list gene calls with NA.
+#' @return  metadata with additional columns.
+add_alpha_chain_combos <- function(metadata, na_if_unknown = FALSE) {
+  for (m in c("trav_gene", "traj_gene")) {
+    if (!m %in% colnames(metadata)) {
+      warning("add_alpha_chain_combos: column '", m, "' not found; setting to NA.")
+      metadata[[m]] <- NA_character_
+    }
+  }
+  metadata <- metadata %>%
+    mutate(
+      trav_gene_std = standardise_gene_calls(trav_gene, "TRAV", na_if_unknown),
+      traj_gene_std = standardise_gene_calls(traj_gene, "TRAJ", na_if_unknown),
+      vj_alpha = if_else(
+        !is.na(trav_gene_std) & !is.na(traj_gene_std),
+        paste(trav_gene_std, traj_gene_std, sep = ":"),
+        NA_character_
+      ),
+      vavb_combo = if_else(
+        !is.na(trav_gene_std) & "trbv_gene" %in% colnames(.) &
+          !is.na(trbv_gene) & trbv_gene != "",
+        paste(trav_gene_std, trbv_gene, sep = ":"),
+        NA_character_
+      ),
+      full_vj_combo = if_else(
+        !is.na(trav_gene_std) & !is.na(traj_gene_std) &
+          "trbv_gene" %in% colnames(.) & !is.na(trbv_gene) & trbv_gene != "" &
+          "trbj_gene" %in% colnames(.) & !is.na(trbj_gene) & trbj_gene != "",
+        paste(trav_gene_std, traj_gene_std, trbv_gene, trbj_gene, sep = ":"),
+        NA_character_
+      )
+    )
+  metadata
+}
+
+#' Run complete multi-segment TCR diversity analysis (beta + alpha + paired)
+#'
+#' Covers TRBV, TRBD, TRBJ, TRAV, TRAJ, VJ_beta, VJ_alpha, VA:VB, and the
+#' full four-segment paired proxy. Correlates each with true clonotype diversity.
+#'
+#' @param metadata    Data frame after add_vdj_combos() and add_alpha_chain_combos().
+#' @param group_vars  Grouping column(s).
+#' @param min_cells   Minimum cells per group.
+#' @param downsample_n Optional downsampling target.
+#' @return  List with $metrics, $correlations, $clonotype.
+run_full_tcr_analysis <- function(metadata,
+                                   group_vars   = "sample_id",
+                                   min_cells    = 30,
+                                   downsample_n = 0) {
+
+  if (!"vj_combo" %in% colnames(metadata))
+    metadata <- add_vdj_combos(metadata)
+  if (!"vj_alpha" %in% colnames(metadata))
+    metadata <- add_alpha_chain_combos(metadata)
+
+  # Standardise beta-chain calls
+  for (col in c("trbv_gene","trbj_gene","trbd_gene")) {
+    chain <- toupper(sub("_gene$","",col))
+    if (col %in% colnames(metadata))
+      metadata[[col]] <- standardise_gene_calls(metadata[[col]], chain)
+  }
+
+  message("=== Full TCR Multi-Segment Analysis (Beta + Alpha + Paired) ===")
+
+  seg_info <- list(
+    list(col="trbv_gene",     label="TRBV"),
+    list(col="trbj_gene",     label="TRBJ"),
+    list(col="trbd_gene",     label="TRBD"),
+    list(col="trav_gene_std", label="TRAV"),
+    list(col="traj_gene_std", label="TRAJ"),
+    list(col="vj_combo",      label="VJ_beta"),
+    list(col="vj_alpha",      label="VJ_alpha"),
+    list(col="vavb_combo",    label="VA_VB"),
+    list(col="full_vj_combo", label="Full_paired")
+  )
+
+  for (s in seg_info) {
+    n <- if (s$col %in% colnames(metadata))
+      sum(!is.na(metadata[[s$col]]) & metadata[[s$col]] != "") else 0L
+    message(sprintf("  %-14s: %d / %d cells (%.1f%%)",
+                    s$label, n, nrow(metadata), 100*n/nrow(metadata)))
+  }
+
+  clono      <- compute_clonotype_diversity(metadata, group_vars, min_cells, downsample_n)
+  seg_tables <- lapply(seg_info, function(s) {
+    if (!s$col %in% colnames(metadata)) return(NULL)
+    n_valid <- sum(!is.na(metadata[[s$col]]) & metadata[[s$col]] != "")
+    if (n_valid < min_cells) return(NULL)
+    message("  Computing ", s$label, "...")
+    compute_gene_segment_diversity(metadata, s$col, group_vars,
+                                    min_cells, downsample_n, metric_label=s$label)
+  })
+  seg_tables <- Filter(Negate(is.null), seg_tables)
+
+  metrics_wide <- Reduce(function(a,b) left_join(a, b, by=group_vars), seg_tables)
+  metrics_wide <- left_join(metrics_wide, clono, by=group_vars)
+
+  h_cols <- intersect(paste0("H_", vapply(seg_info,`[[`,character(1),"label")),
+                      colnames(metrics_wide))
+
+  correlations <- purrr::map_dfr(h_cols, function(hcol) {
+    label <- sub("^H_","",hcol)
+    x <- metrics_wide[[hcol]]; y <- metrics_wide$H_clonotype
+    ok <- !is.na(x) & !is.na(y)
+    if (sum(ok) < 3)
+      return(data.frame(metric=label, n_groups=sum(ok),
+                        spearman_rho=NA_real_, spearman_p=NA_real_,
+                        pearson_r=NA_real_, pearson_p=NA_real_))
+    sp <- cor.test(x[ok], y[ok], method="spearman", exact=FALSE)
+    pe <- cor.test(x[ok], y[ok], method="pearson")
+    data.frame(metric=label, n_groups=sum(ok),
+               spearman_rho=round(sp$estimate,4), spearman_p=round(sp$p.value,4),
+               pearson_r=round(pe$estimate,4),    pearson_p=round(pe$p.value,4))
+  }) %>% arrange(desc(abs(spearman_rho)))
+
+  message("\nCorrelation ranking (Spearman ρ with H_clonotype):")
+  print(correlations %>% select(metric, n_groups, spearman_rho, spearman_p))
+
+  list(metrics=metrics_wide, correlations=correlations, clonotype=clono)
+}
+
+#' Stacked barplot for any TCR gene segment column
+#'
+#' Works for TRAV, TRAJ, TRBV, TRBJ, TRBD, or any discrete gene call column.
+#'
+#' @param metadata    Data frame with gene_col and group_var columns.
+#' @param gene_col    Column name of the gene calls.
+#' @param group_var   Column for x-axis grouping.
+#' @param top_n_genes Top N genes to show (remainder → "Other").
+#' @param title       Optional plot title.
+#' @return  ggplot2 object.
+plot_gene_usage_bar <- function(metadata,
+                                 gene_col,
+                                 group_var   = "sample_id",
+                                 top_n_genes = 20,
+                                 title       = NULL) {
+  top_genes <- metadata %>%
+    filter(!is.na(.data[[gene_col]]), .data[[gene_col]] != "") %>%
+    count(.data[[gene_col]], sort=TRUE) %>%
+    slice_head(n=top_n_genes) %>%
+    pull(1)
+
+  plot_df <- metadata %>%
+    filter(!is.na(.data[[gene_col]]), .data[[gene_col]] != "") %>%
+    mutate(gene_plot = if_else(.data[[gene_col]] %in% top_genes,
+                                .data[[gene_col]], "Other")) %>%
+    count(.data[[group_var]], gene_plot) %>%
+    group_by(.data[[group_var]]) %>%
+    mutate(freq = n / sum(n)) %>%
+    ungroup() %>%
+    mutate(gene_plot = factor(gene_plot, levels=c(sort(top_genes),"Other")))
+
+  n_col  <- length(unique(plot_df$gene_plot))
+  colors <- c(.trbv_palette(n_col - 1), "grey70")
+  names(colors) <- levels(plot_df$gene_plot)
+
+  ggplot(plot_df, aes(x=.data[[group_var]], y=freq, fill=gene_plot)) +
+    geom_bar(stat="identity", width=0.8, color="white", linewidth=0.2) +
+    scale_fill_manual(values=colors, name=gene_col) +
+    scale_y_continuous(labels=percent_format()) +
+    labs(title    = title %||% paste(gene_col, "Usage per Sample"),
+         subtitle = paste0("Top ", top_n_genes, " genes shown"),
+         x = group_var, y = "Proportion of T cells") +
+    theme_bw(base_size=12) +
+    theme(axis.text.x=element_text(angle=45, hjust=1),
+          legend.key.size=unit(0.4,"cm"),
+          legend.text=element_text(size=8))
+}
+
+#' Heatmap of gene usage proportions for any TCR segment
+#'
+#' @param metadata    Data frame with gene_col and group_var columns.
+#' @param gene_col    Column name of the gene calls.
+#' @param group_var   Column for heatmap columns.
+#' @param top_n_genes Number of top genes to display.
+#' @return  Invisible NULL (pheatmap renders directly).
+plot_gene_usage_heatmap <- function(metadata,
+                                     gene_col,
+                                     group_var   = "sample_id",
+                                     top_n_genes = 30) {
+  top_genes <- metadata %>%
+    filter(!is.na(.data[[gene_col]]), .data[[gene_col]] != "") %>%
+    count(.data[[gene_col]], sort=TRUE) %>%
+    slice_head(n=top_n_genes) %>%
+    pull(1)
+
+  heat_mat <- metadata %>%
+    filter(.data[[gene_col]] %in% top_genes) %>%
+    count(.data[[group_var]], .data[[gene_col]]) %>%
+    group_by(.data[[group_var]]) %>%
+    mutate(prop = n / sum(n)) %>%
+    ungroup() %>%
+    select(-n) %>%
+    pivot_wider(names_from=all_of(group_var),
+                values_from=prop, values_fill=0) %>%
+    tibble::column_to_rownames(gene_col) %>%
+    as.matrix()
+
+  pheatmap::pheatmap(
+    heat_mat,
+    color        = colorRampPalette(c("white","#2166AC","#053061"))(100),
+    main         = paste(gene_col, "Usage Heatmap"),
+    fontsize_row = 7, fontsize_col = 9,
+    cluster_rows = TRUE, cluster_cols = TRUE, border_color = NA
+  )
+  invisible(NULL)
+}
+}
