@@ -1,47 +1,4 @@
-# ECHO — Evaluating Clonality Heuristics in scOmics
-
-**Sidiropoulos Lab | Johns Hopkins School of Medicine**
-
-A computational framework for evaluating and benchmarking TCR diversity proxies
-against ground-truth clonotype diversity in matched single-cell RNA-seq and
-single-cell TCR-seq datasets.
-
----
-
-## Background
-
-NanoString's nCounter TCR Diversity panel estimates T cell repertoire diversity
-from TCR beta variable (TRBV) gene usage rather than full CDR3 clonotype
-sequences. This is widely used in clinical trial immune monitoring, but has
-never been formally validated against CDR3-level clonotype diversity in a
-matched single-cell dataset.
-
-**ECHO** provides a systematic framework to:
-
-1. Compute TRBV usage diversity (NanoString-style proxy) per sample and T cell compartment
-2. Extend the proxy to V+J gene combination diversity — a higher-resolution alternative
-3. Compute true CDR3 clonotype diversity from matched TCR-seq (ground truth)
-4. Correlate proxy metrics against ground truth and quantify failure modes
-5. Score canonical T cell gene expression programs (Exhaustion, Activation,
-   Cytotoxic, Proliferation, Memory) and test whether they add orthogonal signal
-
----
-
-## Key Findings (J1568 Batch 1 Proof-of-Concept)
-
-| Metric | Unique categories | Spearman ρ vs H_clonotype (compartment-stratified) |
-|---|---|---|
-| TRBV only (NanoString-style) | 44 genes | 0.71–0.90 |
-| VJ combination | ~440 combos | **0.97–1.00** |
-| Exhaustion program score | — | −0.73 (independent signal) |
-| True CDR3 clonotype | ~1,946 | 1.00 (ground truth) |
-
-> **Critical caveat:** The TRBV proxy only performs as designed **within a defined
-> T cell compartment** (sorted CD4 or CD8). Across pooled T cells, ρ = 0.50
-> (non-significant). This validates the NanoString assay's core assumption:
-> compartment stratification is required.
-
----
+# ECHO — Evaluating Clonality Heuristics in Omics
 
 ## Repository Structure
 
