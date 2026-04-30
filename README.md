@@ -170,25 +170,6 @@ install.packages(c(
 
 ---
 
-## Interpretation Notes
-
-> **The TRBV usage diversity metric is NOT true TCR diversity.**
->
-> It measures V-gene usage breadth and evenness (CDR1 + CDR2 loop diversity).
-> CDR1 and CDR2 contact MHC — not peptide antigen. Multiple clonotypes with
-> completely different CDR3 sequences (and different antigen specificities) share
-> the same TRBV gene and identical CDR1/CDR2.
->
-> The VJ combination metric additionally captures the 5' boundary of CDR3
-> (via J-gene contribution to CDR3 length distribution) and FR4, providing
-> ~10× more resolution than TRBV alone.
->
-> True clonotype diversity requires full CDR3 sequencing.
-
----
-
 ## Citation
 
 If you use this framework, please cite: *(manuscript in preparation)*
-
-**Contact:** Dimitri Sidiropoulos | dsidiropoulos@jhmi.edu | Sidiropoulos Lab, Johns Hopkins
