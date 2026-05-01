@@ -2556,3 +2556,1102 @@ plot_gene_usage_heatmap <- function(metadata,
   invisible(NULL)
 }
 }
+
+
+# =============================================================================
+# SECTION 13: CD4/CD8 STRATIFICATION AND PSEUDOCLONOTYPE ANALYSIS
+# =============================================================================
+#
+# OVERVIEW:
+#   Part A — Subset detection and stratification
+#     Detects cell type annotation columns in h5ad-derived metadata, maps them
+#     to CD4 / CD8 / Treg / DN / Unknown, and enables all diversity analyses
+#     to be run per sample × subset rather than per sample only.
+#
+#   Part B — Pseudoclonotype assignment and recapitulation metrics
+#     For each gene-combination level (from coarse TRBV-only to the full
+#     4-segment TRAV:TRAJ:TRBV:TRBJ paired proxy), cells sharing the same
+#     gene-combo are assigned the same "pseudoclonotype" label. The analysis
+#     then quantifies how well each level recapitulates true CDR3 clonotypes
+#     using four complementary metrics:
+#
+#       Purity        — of cells sharing a pseudoclonotype, what fraction share
+#                       the dominant real clonotype? (high = each pseudo maps to
+#                       one real clone)
+#       Collision rate — fraction of pseudoclonotypes containing >1 distinct real
+#                       clonotype (high = proxy lumps unrelated clones together)
+#       Split rate    — fraction of real clonotypes spanning >1 pseudoclonotype
+#                       (high = proxy artificially fragments a real clone)
+#       H-correlation — Spearman ρ of Shannon diversity(pseudoclonotype) vs
+#                       Shannon diversity(real clonotype) across samples
+#
+#   All analyses are stratified by CD4/CD8 subset when annotation is present.
+# =============================================================================
+
+
+# ── PART A: CD4/CD8 SUBSET DETECTION AND STANDARDISATION ─────────────────────
+
+# Common column name patterns that carry T cell subset annotations
+.SUBSET_COL_CANDIDATES <- c(
+  "cell_type","celltype","cell_type_l1","cell_type_l2","cell_type_l3",
+  "subset","T_cell_type","T_cell_subset","lineage","CD4_CD8","cd4_cd8",
+  "cluster_label","leiden_label","annotation","predicted.id","SingleR.labels",
+  "majority_voting","sctype","azimuth","broad_cell_type","fine_cell_type"
+)
+
+# Regex patterns mapping annotation strings to canonical subsets
+.SUBSET_MAP <- list(
+  CD8  = c("CD8","cd8","cytotoxic","CTL","cytotox","TE","Tem","Tex",
+           "exhausted","effector memory","effector CD8","CD8T"),
+  CD4  = c("CD4","cd4","T helper","Th1","Th2","Th17","Tfh","T_helper",
+           "helper","CD4T","naive CD4"),
+  Treg = c("Treg","T_reg","regulatory","FOXP3","T regulatory"),
+  DN   = c("double negative","DN_T","double-negative","DN T","gamma.delta","gd","gdT")
+)
+
+#' Auto-detect the best T cell subset annotation column in a metadata data frame
+#'
+#' Checks candidate column names, then for each candidate verifies that at
+#' least 5% of non-NA values match a CD4 or CD8 pattern. Returns the column
+#' with the highest fraction of mappable values.
+#'
+#' @param metadata  Data frame (from load_h5ad_metadata).
+#' @return  Column name (character) or NULL if none found.
+detect_subset_column <- function(metadata) {
+  cols <- colnames(metadata)
+
+  # Exact or substring match against candidates
+  hits <- intersect(.SUBSET_COL_CANDIDATES, cols)
+  if (length(hits) == 0) {
+    # Fall back to fuzzy match
+    hits <- cols[grep(paste(.SUBSET_COL_CANDIDATES, collapse="|"),
+                      cols, ignore.case=TRUE)]
+  }
+  if (length(hits) == 0) return(NULL)
+
+  cd4_pat <- paste(.SUBSET_MAP$CD4,  collapse="|")
+  cd8_pat <- paste(.SUBSET_MAP$CD8,  collapse="|")
+
+  scores <- vapply(hits, function(col) {
+    vals <- as.character(metadata[[col]])
+    vals <- vals[!is.na(vals)]
+    if (length(vals) == 0) return(0)
+    mean(grepl(cd4_pat, vals, ignore.case=TRUE) |
+         grepl(cd8_pat, vals, ignore.case=TRUE))
+  }, numeric(1))
+
+  best <- hits[which.max(scores)]
+  if (max(scores) < 0.05) return(NULL)  # < 5% mappable → not useful
+  best
+}
+
+#' Map raw annotation strings to canonical T cell subsets
+#'
+#' Returns one of: "CD8", "CD4", "Treg", "DN", "Non_T", "Unknown".
+#'
+#' @param x   Character vector of raw cell type annotations.
+#' @return  Character vector of canonical labels.
+standardise_subset <- function(x) {
+  x <- as.character(x)
+  out <- rep("Unknown", length(x))
+  out[is.na(x) | x %in% c("","None","nan","NaN")] <- "Unknown"
+
+  for (label in c("Treg","CD8","CD4","DN")) {   # Treg before CD4 (subset)
+    pat <- paste(.SUBSET_MAP[[label]], collapse="|")
+    out[grepl(pat, x, ignore.case=TRUE)] <- label
+  }
+  out[grepl("non.?t|nonT|non_T|B cell|NK|Mono|DC|macro|plasma|mast|neutro",
+            x, ignore.case=TRUE)] <- "Non_T"
+  out
+}
+
+#' Add a standardised 'subset' column to TCR metadata
+#'
+#' Detects the best annotation column and maps values to CD4/CD8/Treg/DN.
+#' Optionally removes Non_T and Unknown cells.
+#'
+#' @param metadata       Data frame with cell-level metadata.
+#' @param subset_col     Override: exact column name to use (skips auto-detect).
+#' @param keep_nont      If FALSE (default), remove Non_T cells.
+#' @param keep_unknown   If FALSE (default), remove Unknown cells.
+#' @return  metadata with 'subset' column added. Reports mapping counts.
+add_subset_from_annotation <- function(metadata,
+                                        subset_col   = NULL,
+                                        keep_nont    = FALSE,
+                                        keep_unknown = FALSE) {
+
+  if (is.null(subset_col)) subset_col <- detect_subset_column(metadata)
+
+  if (is.null(subset_col)) {
+    warning("No subset annotation column detected. ",
+            "Set subset_col= manually or use annotate_tcell_subsets_from_aggr().\n",
+            "Returning metadata with subset = 'Unknown' for all cells.")
+    metadata$subset <- "Unknown"
+    return(metadata)
+  }
+
+  message("  Using '", subset_col, "' for T cell subset annotation.")
+  metadata$subset <- standardise_subset(metadata[[subset_col]])
+
+  tab <- table(metadata$subset)
+  message("  Subset mapping:")
+  for (nm in names(tab))
+    message(sprintf("    %-10s: %d (%.1f%%)", nm, tab[nm], 100*tab[nm]/nrow(metadata)))
+
+  if (!keep_nont)    metadata <- metadata[metadata$subset != "Non_T",    ]
+  if (!keep_unknown) metadata <- metadata[metadata$subset != "Unknown",  ]
+
+  metadata
+}
+
+
+# ── PART B: PSEUDOCLONOTYPE ASSIGNMENT AND RECAPITULATION METRICS ─────────────
+
+# Gene-combo levels in increasing order of resolution
+PSEUDO_LEVELS <- list(
+  list(col="trbv_gene",     label="TRBV"),
+  list(col="trbj_gene",     label="TRBJ"),
+  list(col="vj_combo",      label="VJ_beta"),
+  list(col="trav_gene_std", label="TRAV"),
+  list(col="vj_alpha",      label="VJ_alpha"),
+  list(col="vavb_combo",    label="VA_VB"),
+  list(col="full_vj_combo", label="Full_paired")
+)
+
+#' Compute pseudoclonotype recapitulation metrics for one gene-combo level
+#'
+#' For each group (sample × subset), assigns pseudoclonotype labels based on
+#' shared gene-combo strings, then computes purity, collision rate, split rate,
+#' and diversity correlation vs real CDR3 clonotypes.
+#'
+#' @param metadata   Data frame. Must contain pseudo_col, clono_col,
+#'                   and group_vars columns.
+#' @param pseudo_col Column name of the gene-combo to use as pseudoclonotype
+#'                   labels (e.g., "full_vj_combo", "vj_combo").
+#' @param clono_col  Column name of real CDR3 clonotype labels. Default "clonotype_id".
+#' @param group_vars Grouping column names (e.g., c("sample_id","subset")).
+#' @param min_cells  Minimum cells per group (default 30).
+#' @return  Data frame with one row per group and columns:
+#'   n_cells, coverage, n_pseudo, n_real, pseudo_real_ratio,
+#'   H_pseudo, H_real, H_norm_pseudo, H_norm_real,
+#'   purity, collision_rate, split_rate, spearman_rho_H
+compute_pseudoclonotype_metrics <- function(metadata,
+                                             pseudo_col,
+                                             clono_col  = "clonotype_id",
+                                             group_vars = "sample_id",
+                                             min_cells  = 30) {
+
+  if (!pseudo_col %in% colnames(metadata))
+    stop("Column '", pseudo_col, "' not found in metadata.")
+  if (!clono_col  %in% colnames(metadata))
+    stop("Column '", clono_col,  "' not found in metadata.")
+
+  # Filter to cells with both assignments
+  df <- metadata %>%
+    filter(!is.na(.data[[pseudo_col]]), .data[[pseudo_col]] != "",
+           !is.na(.data[[clono_col]]),  .data[[clono_col]]  != "")
+
+  if (nrow(df) == 0) {
+    warning("No cells with both '", pseudo_col, "' and '", clono_col, "' assigned.")
+    return(tibble())
+  }
+
+  groups <- df %>%
+    group_by(across(all_of(group_vars))) %>%
+    summarise(n_cells_both = n(), .groups="drop") %>%
+    filter(n_cells_both >= min_cells)
+
+  if (nrow(groups) == 0) {
+    warning("No groups pass min_cells threshold (", min_cells, ").")
+    return(tibble())
+  }
+
+  purrr::map_dfr(seq_len(nrow(groups)), function(i) {
+    # Filter to this group
+    grp <- groups[i, , drop=FALSE]
+    grp_df <- df
+    for (gv in group_vars)
+      grp_df <- grp_df[grp_df[[gv]] == grp[[gv]], ]
+
+    n_cells    <- nrow(grp_df)
+    n_cells_all <- sum(metadata[[group_vars[1]]] == grp[[group_vars[1]]])
+
+    pseudo_vec <- grp_df[[pseudo_col]]
+    real_vec   <- grp_df[[clono_col]]
+
+    # Coverage = fraction of all cells in group with valid assignment
+    coverage <- n_cells / max(n_cells_all, 1)
+
+    # Shannon diversity
+    pseudo_cts <- table(pseudo_vec)
+    real_cts   <- table(real_vec)
+    H_pseudo   <- shannon_diversity(as.numeric(pseudo_cts))
+    H_real     <- shannon_diversity(as.numeric(real_cts))
+    Hn_pseudo  <- normalized_shannon(as.numeric(pseudo_cts))
+    Hn_real    <- normalized_shannon(as.numeric(real_cts))
+
+    n_pseudo <- length(pseudo_cts)
+    n_real   <- length(real_cts)
+
+    # ── Purity ──────────────────────────────────────────────────────────────
+    # For each pseudoclonotype, what fraction of its cells share the dominant
+    # real clonotype?
+    purity_per_pseudo <- grp_df %>%
+      group_by(.data[[pseudo_col]]) %>%
+      summarise(
+        n_in_pseudo = n(),
+        dom_frac = max(table(.data[[clono_col]])) / n(),
+        .groups = "drop"
+      )
+    # Weighted purity (weight by pseudoclonotype size)
+    purity <- with(purity_per_pseudo,
+                   sum(n_in_pseudo * dom_frac) / sum(n_in_pseudo))
+
+    # ── Collision rate ────────────────────────────────────────────────────────
+    # Fraction of pseudoclonotypes that contain >1 distinct real clonotype
+    n_collisions <- grp_df %>%
+      group_by(.data[[pseudo_col]]) %>%
+      summarise(n_real_in_pseudo = n_distinct(.data[[clono_col]]), .groups="drop") %>%
+      summarise(n_coll = sum(n_real_in_pseudo > 1), n_total = n()) %>%
+      { .$n_coll / .$n_total }
+    collision_rate <- as.numeric(n_collisions)
+
+    # ── Split rate ────────────────────────────────────────────────────────────
+    # Fraction of real clonotypes that span >1 pseudoclonotype
+    n_splits <- grp_df %>%
+      group_by(.data[[clono_col]]) %>%
+      summarise(n_pseudo_for_real = n_distinct(.data[[pseudo_col]]), .groups="drop") %>%
+      summarise(n_split = sum(n_pseudo_for_real > 1), n_total = n()) %>%
+      { .$n_split / .$n_total }
+    split_rate <- as.numeric(n_splits)
+
+    # Combine group keys + metrics
+    bind_cols(
+      grp,
+      tibble(
+        n_cells          = n_cells,
+        coverage         = round(coverage, 3),
+        n_pseudo         = n_pseudo,
+        n_real           = n_real,
+        pseudo_real_ratio= round(n_pseudo / max(n_real, 1), 3),
+        H_pseudo         = round(H_pseudo,  4),
+        H_real           = round(H_real,    4),
+        H_norm_pseudo    = round(Hn_pseudo, 4),
+        H_norm_real      = round(Hn_real,   4),
+        purity           = round(purity,         3),
+        collision_rate   = round(collision_rate,  3),
+        split_rate       = round(split_rate,      3)
+      )
+    )
+  })
+}
+
+#' Run pseudoclonotype recapitulation analysis across all gene-combo levels
+#'
+#' Calls compute_pseudoclonotype_metrics() for every level defined in
+#' PSEUDO_LEVELS and computes a per-level correlation summary.
+#'
+#' @param metadata   Data frame with all combo columns added
+#'                   (run add_vdj_combos() and add_alpha_chain_combos() first).
+#' @param group_vars Grouping columns (e.g., c("sample_id","subset")).
+#' @param min_cells  Minimum cells per group.
+#' @return  List with:
+#'   $per_level  — metrics data frame for each pseudo level (long format)
+#'   $summary    — one row per level: mean purity, collision, split, n_groups
+#'   $h_corr     — Spearman ρ of H_pseudo vs H_real per level
+run_pseudoclonotype_analysis <- function(metadata,
+                                          group_vars = "sample_id",
+                                          min_cells  = 30) {
+
+  message("=== Pseudoclonotype Recapitulation Analysis ===")
+
+  results_list <- lapply(PSEUDO_LEVELS, function(lvl) {
+    if (!lvl$col %in% colnames(metadata)) {
+      message("  Skipping ", lvl$label, " (column not found)")
+      return(NULL)
+    }
+    n_valid <- sum(!is.na(metadata[[lvl$col]]) & metadata[[lvl$col]] != "")
+    if (n_valid < min_cells) {
+      message("  Skipping ", lvl$label, " (< ", min_cells, " valid cells)")
+      return(NULL)
+    }
+    message("  Computing metrics for ", lvl$label, " ...")
+    tbl <- compute_pseudoclonotype_metrics(
+      metadata, lvl$col, "clonotype_id", group_vars, min_cells
+    )
+    if (nrow(tbl) == 0) return(NULL)
+    tbl$pseudo_level <- lvl$label
+    tbl
+  })
+  results_list <- Filter(Negate(is.null), results_list)
+
+  if (length(results_list) == 0) {
+    warning("No pseudoclonotype results computed.")
+    return(list(per_level=tibble(), summary=tibble(), h_corr=tibble()))
+  }
+
+  per_level <- bind_rows(results_list)
+
+  # Summary per level
+  summary_tbl <- per_level %>%
+    group_by(pseudo_level) %>%
+    summarise(
+      n_groups       = n(),
+      mean_purity    = round(mean(purity,         na.rm=TRUE), 3),
+      sd_purity      = round(sd(purity,           na.rm=TRUE), 3),
+      mean_collision = round(mean(collision_rate,  na.rm=TRUE), 3),
+      mean_split     = round(mean(split_rate,      na.rm=TRUE), 3),
+      mean_coverage  = round(mean(coverage,        na.rm=TRUE), 3),
+      mean_n_pseudo  = round(mean(n_pseudo,        na.rm=TRUE), 1),
+      mean_n_real    = round(mean(n_real,          na.rm=TRUE), 1),
+      .groups = "drop"
+    ) %>%
+    # Preserve the resolution order
+    mutate(pseudo_level = factor(pseudo_level,
+                                  levels=vapply(PSEUDO_LEVELS,`[[`,character(1),"label"))) %>%
+    arrange(pseudo_level)
+
+  # H_pseudo vs H_real Spearman correlation per level
+  h_corr <- per_level %>%
+    group_by(pseudo_level) %>%
+    summarise(
+      n_groups     = n(),
+      spearman_rho = {
+        ok <- !is.na(H_pseudo) & !is.na(H_real) & n() >= 3
+        if (sum(ok) < 3) NA_real_
+        else round(cor(H_pseudo[ok], H_real[ok], method="spearman"), 4)
+      },
+      .groups = "drop"
+    )
+
+  message("\n--- Pseudoclonotype summary ---")
+  print(summary_tbl %>% select(pseudo_level, n_groups, mean_purity,
+                                mean_collision, mean_split, mean_coverage))
+
+  list(per_level=per_level, summary=summary_tbl, h_corr=h_corr)
+}
+
+
+# ── PART B: PLOTTING ──────────────────────────────────────────────────────────
+
+#' Lollipop / dot-range chart: purity, collision, split rate across pseudo levels
+#'
+#' @param pseudo_results  Output of run_pseudoclonotype_analysis().
+#' @param subset_var      If not NULL, colour points by this column (e.g., "subset").
+#' @return  ggplot2 object (patchwork of three panels).
+plot_pseudoclonotype_summary <- function(pseudo_results, subset_var = NULL) {
+
+  per <- pseudo_results$per_level
+  smry <- pseudo_results$summary
+
+  level_order <- levels(smry$pseudo_level)
+  if (is.null(level_order))
+    level_order <- unique(smry$pseudo_level)
+
+  per <- per %>%
+    mutate(pseudo_level = factor(pseudo_level, levels=level_order))
+  smry <- smry %>%
+    mutate(pseudo_level = factor(pseudo_level, levels=level_order))
+
+  color_aes <- if (!is.null(subset_var) && subset_var %in% colnames(per))
+    aes(color=.data[[subset_var]]) else aes()
+
+  subset_scale <- if (!is.null(subset_var) && subset_var %in% colnames(per))
+    scale_color_manual(values=c(CD8="#D6604D",CD4="#2166AC",
+                                 Treg="#4DAF4A",DN="#FF7F00",Unknown="grey60"),
+                        name="Subset")
+  else NULL
+
+  p1 <- ggplot(per, aes(x=pseudo_level, y=purity)) +
+    geom_jitter(color_aes, width=.15, size=2.5, alpha=.7) +
+    geom_point(data=smry, aes(y=mean_purity), color="black", size=4, shape=18) +
+    geom_errorbar(data=smry, aes(y=mean_purity,
+                                  ymin=mean_purity-sd_purity,
+                                  ymax=mean_purity+sd_purity),
+                  width=.2, linewidth=.8, color="black") +
+    subset_scale +
+    scale_y_continuous(limits=c(0,1), labels=percent_format()) +
+    labs(title="Purity", subtitle="Higher = each pseudo maps to one real clone",
+         x=NULL, y="Weighted purity") +
+    theme_bw(base_size=11) +
+    theme(axis.text.x=element_text(angle=35, hjust=1))
+
+  p2 <- ggplot(per, aes(x=pseudo_level, y=collision_rate)) +
+    geom_jitter(color_aes, width=.15, size=2.5, alpha=.7) +
+    geom_point(data=smry, aes(y=mean_collision), color="black", size=4, shape=18) +
+    subset_scale +
+    scale_y_continuous(limits=c(0,1), labels=percent_format()) +
+    labs(title="Collision Rate",
+         subtitle="Fraction of pseudos containing >1 real clonotype",
+         x=NULL, y="Collision rate") +
+    theme_bw(base_size=11) +
+    theme(axis.text.x=element_text(angle=35, hjust=1), legend.position="none")
+
+  p3 <- ggplot(per, aes(x=pseudo_level, y=split_rate)) +
+    geom_jitter(color_aes, width=.15, size=2.5, alpha=.7) +
+    geom_point(data=smry, aes(y=mean_split), color="black", size=4, shape=18) +
+    subset_scale +
+    scale_y_continuous(limits=c(0,1), labels=percent_format()) +
+    labs(title="Split Rate",
+         subtitle="Fraction of real clonotypes spanning >1 pseudo",
+         x=NULL, y="Split rate") +
+    theme_bw(base_size=11) +
+    theme(axis.text.x=element_text(angle=35, hjust=1), legend.position="none")
+
+  (p1 | p2 | p3) +
+    plot_annotation(
+      title    = "Pseudoclonotype Recapitulation — Gene-Combo Level Comparison",
+      subtitle = "Diamond = group mean ± SD. TRBV = coarsest; Full_paired = finest proxy.",
+      theme    = theme(plot.title=element_text(face="bold",size=13))
+    )
+}
+
+#' Scatter: H_pseudoclonotype vs H_real per group, faceted by pseudo level
+#'
+#' @param pseudo_results  Output of run_pseudoclonotype_analysis().
+#' @param group_var       Column used to colour/label points.
+#' @param subset_var      If not NULL, facet within each level by subset.
+#' @return  ggplot2 object.
+plot_pseudo_h_scatter <- function(pseudo_results,
+                                   group_var  = "sample_id",
+                                   subset_var = NULL) {
+
+  per <- pseudo_results$per_level
+  h_cor <- pseudo_results$h_corr
+
+  level_order <- unique(per$pseudo_level)
+
+  rho_labels <- h_cor %>%
+    transmute(pseudo_level,
+              label = paste0("ρ = ", sprintf("%.2f", spearman_rho)))
+
+  per <- left_join(per, rho_labels, by="pseudo_level") %>%
+    mutate(pseudo_level = factor(pseudo_level, levels=level_order))
+
+  color_aes <- if (!is.null(subset_var) && subset_var %in% colnames(per))
+    aes(color=.data[[subset_var]]) else aes(color=.data[[group_var]])
+
+  all_h <- c(per$H_pseudo, per$H_real)
+  h_rng <- range(all_h, na.rm=TRUE)
+
+  ggplot(per, aes(x=H_pseudo, y=H_real)) +
+    geom_abline(slope=1, intercept=0, color="red", linetype="dotted", linewidth=.7) +
+    geom_point(color_aes, size=2.8, alpha=.8) +
+    geom_smooth(method="lm", se=TRUE, color="grey40",
+                linetype="dashed", linewidth=.7) +
+    geom_text(aes(label=label), x=Inf, y=-Inf, hjust=1.05, vjust=-.3,
+              size=3, color="grey30", inherit.aes=FALSE) +
+    facet_wrap(vars(pseudo_level), scales="free", ncol=4) +
+    labs(
+      title    = "H(pseudoclonotype) vs H(real clonotype)",
+      subtitle = "Each point = one sample × subset group. Red dotted = 1:1. ρ shown per facet.",
+      x        = "Shannon diversity of pseudoclonotype labels",
+      y        = "Shannon diversity of real CDR3 clonotypes"
+    ) +
+    theme_bw(base_size=11) +
+    theme(strip.text=element_text(face="bold", size=9), legend.position="bottom")
+}
+
+#' Purity heatmap: pseudo level × subset (mean purity)
+#'
+#' @param pseudo_results  Output of run_pseudoclonotype_analysis().
+#' @param subset_var      Column name of the subset variable.
+#' @return  Invisible NULL (pheatmap renders directly).
+plot_purity_heatmap <- function(pseudo_results, subset_var = "subset") {
+
+  per <- pseudo_results$per_level
+
+  if (!subset_var %in% colnames(per)) {
+    warning("Column '", subset_var, "' not found; skipping purity heatmap.")
+    return(invisible(NULL))
+  }
+
+  mat <- per %>%
+    group_by(pseudo_level, .data[[subset_var]]) %>%
+    summarise(mean_purity = mean(purity, na.rm=TRUE), .groups="drop") %>%
+    pivot_wider(names_from=all_of(subset_var),
+                values_from=mean_purity, values_fill=NA) %>%
+    tibble::column_to_rownames("pseudo_level") %>%
+    as.matrix()
+
+  pheatmap::pheatmap(
+    mat,
+    color       = colorRampPalette(c("#fee2e2","#fef3c7","#d1fae5"))(100),
+    main        = "Mean Pseudoclonotype Purity\n(by gene-combo level × T cell subset)",
+    display_numbers = TRUE,
+    number_format   = "%.2f",
+    fontsize_row = 10, fontsize_col = 11,
+    cluster_rows = FALSE, cluster_cols = FALSE,
+    border_color = "white", na_col = "grey90"
+  )
+  invisible(NULL)
+}
+
+
+# =============================================================================
+# SECTION 14: RNA-SEQ TCR GENE EXPRESSION ANALYSIS
+# =============================================================================
+#
+# OVERVIEW:
+#   Compares two sources of TCR gene usage information:
+#
+#   (A) TCR-seq calls  — V/J gene assignments from VDJ sequencing (precise,
+#       sequence-level, one call per cell).
+#   (B) RNA-seq expression — which TCR gene locus has the highest normalised
+#       expression in the scRNA-seq matrix (noisier, but available in any
+#       scRNA-seq dataset without matched VDJ library).
+#
+#   Concordance between A and B validates that RNA-seq expression can serve
+#   as a fallback when TCR-seq is unavailable.
+#
+# SUBSET CLASSIFICATION (extended):
+#   DP  — CD4 > 0  AND  CD8A/B > 0  (double positive)
+#   CD8 — CD8A/B > 0  AND  NOT CD4  (single positive CD8)
+#   Treg— CD4 > 0  AND  FOXP3 > 0  AND  NOT CD8
+#   CD4 — CD4 > 0  AND  NOT CD8  AND  NOT FOXP3  (single positive CD4)
+#   DN  — CD3D/E > 0  AND  NOT CD4  AND  NOT CD8  (double negative)
+#   Non_T — no CD3 signal
+#
+# KEY FUNCTIONS:
+#   load_h5ad_with_expression()
+#   assign_rnaseq_dominant_gene()
+#   compute_rnaseq_gene_usage_diversity()
+#   compare_rnaseq_vs_tcrseq()
+#   plot_tcr_expression_heatmap()
+#   annotate_subsets_extended()        # adds DP and DN
+# =============================================================================
+
+
+# ── 14.1  Extended subset annotation (CD4 / CD8 / DP / DN / Treg) ────────────
+
+# Extended annotation-string patterns
+.SUBSET_MAP_EXT <- list(
+  DP   = c("DP","double.positive","CD4.*CD8","CD8.*CD4","DP T","double pos"),
+  CD8  = c("CD8","cytotoxic","CTL","cytotox","Tex","exhausted","effector CD8","CD8T"),
+  Treg = c("Treg","T_reg","regulatory","FOXP3","T regulatory"),
+  CD4  = c("CD4","T helper","Th1","Th2","Th17","Tfh","T_helper","CD4T","naive CD4"),
+  DN   = c("double.negative","DN_T","DN T","gamma.delta","gdT","gd T","NKT")
+)
+
+#' Map raw annotation strings to extended canonical T cell subsets
+#'
+#' Returns one of: "DP", "CD8", "Treg", "CD4", "DN", "Non_T", "Unknown".
+#' Order matters: DP is checked before CD8 and CD4.
+#'
+#' @param x  Character vector of raw annotations.
+#' @return   Character vector of canonical subset labels.
+standardise_subset_extended <- function(x) {
+  x   <- as.character(x)
+  out <- rep("Unknown", length(x))
+  out[is.na(x) | x %in% c("","None","nan","NaN")] <- "Unknown"
+  out[grepl("non.?t|nonT|non_T|B cell|NK[^T]|Mono|DC|macro|plasma|mast|neutro",
+             x, ignore.case=TRUE)] <- "Non_T"
+  for (label in c("DP","Treg","CD8","CD4","DN")) {
+    pat <- paste(.SUBSET_MAP_EXT[[label]], collapse="|")
+    out[grepl(pat, x, ignore.case=TRUE)] <- label
+  }
+  out
+}
+
+#' Classify cells using marker gene counts into DP/CD8/Treg/CD4/DN/Non_T
+#'
+#' Hierarchical rule applied to raw count columns (cd4_count, cd8a_count, etc.)
+#' as produced by annotate_tcell_subsets_from_aggr().
+#'
+#' @param cell_dt   data.table with columns: cd4_count, cd8a_count, cd8b_count,
+#'                  cd3d_count, cd3e_count, foxp3_count.
+#' @param thr       Minimum raw UMI count to call a marker positive (default 1).
+#' @return  cell_dt with a 'subset' column added/replaced.
+classify_subsets_extended <- function(cell_dt, thr = 1) {
+  cell_dt[, subset := fcase(
+    # DP: CD4 AND (CD8A OR CD8B)
+    (cd4_count >= thr) & (cd8a_count >= thr | cd8b_count >= thr),      "DP",
+    # CD8: CD8 only
+    (cd8a_count >= thr | cd8b_count >= thr),                            "CD8",
+    # Treg: CD4 + FOXP3, no CD8
+    (cd4_count >= thr) & (foxp3_count >= thr),                          "Treg",
+    # CD4: CD4 only
+    (cd4_count >= thr),                                                  "CD4",
+    # DN: CD3 signal but no CD4 or CD8
+    (cd3d_count >= thr | cd3e_count >= thr),                            "DN",
+    default = "Non_T"
+  )]
+  cell_dt[]
+}
+
+#' Add extended subset annotation (DP / CD8 / Treg / CD4 / DN) to TCR metadata
+#'
+#' Replaces add_subset_from_annotation() with extended classification.
+#' Detects annotation column and maps to the 6-way scheme.
+#'
+#' @param metadata     Data frame with cell-level metadata.
+#' @param subset_col   Override: exact column to use (NULL = auto-detect).
+#' @param keep_nont    If FALSE (default), drop Non_T cells.
+#' @param keep_unknown If FALSE (default), drop Unknown cells.
+#' @return  metadata with 'subset' column (one of DP/CD8/Treg/CD4/DN/Non_T/Unknown).
+add_subset_extended <- function(metadata,
+                                 subset_col   = NULL,
+                                 keep_nont    = FALSE,
+                                 keep_unknown = FALSE) {
+
+  if (is.null(subset_col)) subset_col <- detect_subset_column(metadata)
+
+  if (is.null(subset_col)) {
+    warning("No subset annotation column detected. All cells labelled 'Unknown'.")
+    metadata$subset <- "Unknown"
+    return(metadata)
+  }
+
+  message("  Using '", subset_col, "' for extended T cell subset annotation.")
+  metadata$subset <- standardise_subset_extended(metadata[[subset_col]])
+
+  tab <- table(metadata$subset)
+  message("  Subset mapping (DP/CD8/Treg/CD4/DN):")
+  for (nm in names(tab))
+    message(sprintf("    %-10s: %d (%.1f%%)", nm, tab[nm], 100*tab[nm]/nrow(metadata)))
+
+  if (!keep_nont)    metadata <- metadata[metadata$subset != "Non_T",    ]
+  if (!keep_unknown) metadata <- metadata[metadata$subset != "Unknown",  ]
+  metadata
+}
+
+
+# ── 14.2  Load h5ad with expression matrix ────────────────────────────────────
+
+#' Load an .h5ad file returning both cell metadata and the expression matrix
+#'
+#' The expression matrix is filtered to only the genes in `genes_keep` before
+#' returning, to avoid loading the full matrix into memory unnecessarily.
+#'
+#' @param path        Path to the .h5ad file.
+#' @param genes_keep  Character vector of gene symbols to retain (e.g.,
+#'                    c(TCR_GENES$TRBV, TCR_GENES$TRAV, ...)).
+#'                    If NULL, the full matrix is returned.
+#' @param layer       Assay/layer name to use. NULL tries logcounts → counts →
+#'                    first available assay (zellkonverter) or X (anndata).
+#' @return  List with:
+#'   $meta  — data frame (one row per cell, barcode_aggr as first column)
+#'   $expr  — sparse or dense matrix (genes × cells), rownames = gene symbols
+#'   $genes — character vector of genes actually found in the matrix
+load_h5ad_with_expression <- function(path,
+                                       genes_keep = NULL,
+                                       layer      = NULL) {
+  stopifnot(file.exists(path))
+  message("  Loading expression matrix from: ", basename(path))
+
+  if (requireNamespace("zellkonverter", quietly=TRUE)) {
+    sce  <- zellkonverter::readH5AD(path, X=TRUE, use_hdf5=FALSE)
+    meta <- as.data.frame(SingleCellExperiment::colData(sce))
+    meta <- tibble::rownames_to_column(meta, "barcode_aggr")
+
+    # Pick assay
+    avail <- SummarizedExperiment::assayNames(sce)
+    chosen <- if (!is.null(layer) && layer %in% avail) layer
+              else if ("logcounts" %in% avail)          "logcounts"
+              else if ("lognorm"   %in% avail)          "lognorm"
+              else if ("counts"    %in% avail)          "counts"
+              else                                       avail[1]
+    message("  Using assay: '", chosen, "'")
+    expr <- SummarizedExperiment::assay(sce, chosen)
+
+    found <- character(0)
+    if (!is.null(genes_keep)) {
+      keep  <- intersect(genes_keep, rownames(expr))
+      expr  <- expr[keep, , drop=FALSE]
+      found <- keep
+      message("  TCR genes found in matrix: ", length(keep),
+              " / ", length(genes_keep))
+    } else {
+      found <- rownames(expr)
+    }
+    return(list(meta=meta, expr=expr, genes=found))
+  }
+
+  if (requireNamespace("anndata", quietly=TRUE)) {
+    ad   <- anndata::read_h5ad(path)
+    meta <- as.data.frame(ad$obs)
+    meta <- tibble::rownames_to_column(meta, "barcode_aggr")
+    expr <- t(ad$X)           # genes × cells
+    rownames(expr) <- ad$var_names
+
+    found <- character(0)
+    if (!is.null(genes_keep)) {
+      keep  <- intersect(genes_keep, rownames(expr))
+      expr  <- expr[keep, , drop=FALSE]
+      found <- keep
+    } else {
+      found <- rownames(expr)
+    }
+    return(list(meta=meta, expr=expr, genes=found))
+  }
+
+  stop("Install zellkonverter (BiocManager) or anndata (CRAN).")
+}
+
+
+# ── 14.3  RNA-seq gene call assignment ────────────────────────────────────────
+
+#' Assign dominant TCR gene per cell from scRNA-seq expression
+#'
+#' For each cell (column), finds the canonical TCR gene (from gene_list) with
+#' the highest expression value. Cells with no detected TCR gene expression
+#' (max value <= min_expr) are returned as NA.
+#'
+#' @param expr       Matrix (genes × cells) of normalised expression values.
+#'                   Rownames must be gene symbols.
+#' @param gene_list  Character vector of canonical genes to consider
+#'                   (e.g., TCR_GENES$TRBV). Genes absent from expr are skipped.
+#' @param min_expr   Minimum expression to call a gene as detected (default 0,
+#'                   i.e., any positive value).
+#' @return  Named character vector (length = ncol(expr)); names = cell barcodes.
+assign_rnaseq_dominant_gene <- function(expr, gene_list, min_expr = 0) {
+  keep <- intersect(gene_list, rownames(expr))
+  if (length(keep) == 0) {
+    warning("No genes from gene_list found in expression matrix rownames.")
+    return(setNames(rep(NA_character_, ncol(expr)), colnames(expr)))
+  }
+
+  sub <- expr[keep, , drop=FALSE]
+
+  # Handle sparse matrices (Matrix package)
+  if (inherits(sub, "sparseMatrix"))
+    sub <- as.matrix(sub)
+
+  max_vals <- apply(sub, 2, max)
+  max_idx  <- apply(sub, 2, which.max)
+
+  calls <- keep[max_idx]
+  calls[max_vals <= min_expr] <- NA_character_
+  setNames(calls, colnames(expr))
+}
+
+#' Add RNA-seq-derived TCR gene calls to cell metadata
+#'
+#' Assigns a dominant TRBV gene (and optionally TRAV, TRBJ, TRAJ) per cell
+#' from the expression matrix and appends as new columns:
+#'   trbv_rna, trav_rna, trbj_rna, traj_rna
+#'
+#' @param meta       Data frame with 'barcode_aggr' column.
+#' @param expr_data  Output of load_h5ad_with_expression() ($expr and $genes).
+#' @param min_expr   Minimum expression value to call a gene detected.
+#' @return  meta with rna_* columns added.
+add_rnaseq_gene_calls <- function(meta, expr_data, min_expr = 0) {
+  expr  <- expr_data$expr
+
+  # Make sure barcodes align
+  bc    <- meta$barcode_aggr
+  bc_in <- intersect(bc, colnames(expr))
+  if (length(bc_in) == 0) {
+    warning("No barcode overlap between metadata and expression matrix.")
+    for (col in c("trbv_rna","trav_rna","trbj_rna","traj_rna"))
+      meta[[col]] <- NA_character_
+    return(meta)
+  }
+  message("  Barcode overlap: ", length(bc_in), " / ", length(bc), " cells")
+
+  chain_defs <- list(
+    trbv_rna = TCR_GENES$TRBV,
+    trav_rna = TCR_GENES$TRAV,
+    trbj_rna = TCR_GENES$TRBJ,
+    traj_rna = TCR_GENES$TRAJ
+  )
+
+  for (col_name in names(chain_defs)) {
+    gene_list <- chain_defs[[col_name]]
+    calls     <- assign_rnaseq_dominant_gene(
+                   expr[, bc_in, drop=FALSE], gene_list, min_expr)
+    call_vec  <- setNames(rep(NA_character_, nrow(meta)), meta$barcode_aggr)
+    call_vec[bc_in] <- calls[bc_in]
+    meta[[col_name]] <- unname(call_vec[meta$barcode_aggr])
+    n_called <- sum(!is.na(meta[[col_name]]))
+    message(sprintf("  %-12s: %d / %d cells assigned (%.1f%%)",
+                    col_name, n_called, nrow(meta),
+                    100*n_called/nrow(meta)))
+  }
+  meta
+}
+
+
+# ── 14.4  RNA-seq vs TCR-seq comparison ──────────────────────────────────────
+
+#' Compare RNA-seq and TCR-seq gene usage per sample × subset
+#'
+#' Computes:
+#'   concordance      — fraction of cells where RNA-seq call matches TCR-seq call
+#'   coverage_rna     — fraction of cells with RNA-seq call
+#'   coverage_tcrseq  — fraction of cells with TCR-seq call
+#'   H_rna / H_tcrseq — Shannon diversity of usage (per group)
+#'   spearman_rho     — correlation between H_rna and H_tcrseq across groups
+#'
+#' @param metadata   Data frame with columns trbv_gene (TCR-seq) and trbv_rna
+#'                   (RNA-seq), plus group_vars.
+#' @param rna_col    RNA-seq gene call column name (default "trbv_rna").
+#' @param tcr_col    TCR-seq gene call column name (default "trbv_gene").
+#' @param group_vars Grouping columns (e.g., c("sample_id","subset")).
+#' @param min_cells  Minimum cells per group.
+#' @return  List with $per_group (data frame) and $correlations (data frame).
+compare_rnaseq_vs_tcrseq <- function(metadata,
+                                      rna_col    = "trbv_rna",
+                                      tcr_col    = "trbv_gene",
+                                      group_vars = "sample_id",
+                                      min_cells  = 30) {
+  for (col in c(rna_col, tcr_col))
+    if (!col %in% colnames(metadata))
+      stop("Column '", col, "' not found in metadata.")
+
+  per_group <- metadata %>%
+    group_by(across(all_of(group_vars))) %>%
+    summarise(
+      n_cells         = n(),
+      n_with_rna      = sum(!is.na(.data[[rna_col]]) & .data[[rna_col]] != ""),
+      n_with_tcr      = sum(!is.na(.data[[tcr_col]]) & .data[[tcr_col]] != ""),
+      n_both          = sum(!is.na(.data[[rna_col]]) & .data[[rna_col]] != "" &
+                             !is.na(.data[[tcr_col]]) & .data[[tcr_col]] != ""),
+      coverage_rna    = round(n_with_rna / n_cells, 3),
+      coverage_tcrseq = round(n_with_tcr / n_cells, 3),
+      # Concordance: only among cells with both calls
+      concordance     = {
+        both <- !is.na(.data[[rna_col]]) & .data[[rna_col]] != "" &
+                !is.na(.data[[tcr_col]]) & .data[[tcr_col]] != ""
+        if (sum(both) == 0) NA_real_
+        else round(mean(.data[[rna_col]][both] == .data[[tcr_col]][both]), 3)
+      },
+      H_rna    = {
+        vals <- .data[[rna_col]][!is.na(.data[[rna_col]]) & .data[[rna_col]] != ""]
+        if (length(vals) < 2) NA_real_
+        else shannon_diversity(as.numeric(table(vals)))
+      },
+      H_tcrseq = {
+        vals <- .data[[tcr_col]][!is.na(.data[[tcr_col]]) & .data[[tcr_col]] != ""]
+        if (length(vals) < 2) NA_real_
+        else shannon_diversity(as.numeric(table(vals)))
+      },
+      .groups = "drop"
+    ) %>%
+    filter(n_cells >= min_cells) %>%
+    mutate(H_diff = H_rna - H_tcrseq)
+
+  # Correlations
+  correlations <- list()
+  ok <- !is.na(per_group$H_rna) & !is.na(per_group$H_tcrseq)
+  if (sum(ok) >= 3) {
+    correlations$spearman <- cor.test(per_group$H_rna[ok],
+                                       per_group$H_tcrseq[ok],
+                                       method="spearman", exact=FALSE)
+    correlations$pearson  <- cor.test(per_group$H_rna[ok],
+                                       per_group$H_tcrseq[ok],
+                                       method="pearson")
+    message(sprintf(
+      "  H_RNA vs H_TCRseq: Spearman rho=%.3f (p=%.4f), n=%d",
+      correlations$spearman$estimate, correlations$spearman$p.value, sum(ok)
+    ))
+    message(sprintf("  Mean concordance: %.1f%%",
+                    100*mean(per_group$concordance, na.rm=TRUE)))
+  }
+
+  # Per-gene concordance
+  shared <- metadata %>%
+    filter(!is.na(.data[[rna_col]]), .data[[rna_col]] != "",
+           !is.na(.data[[tcr_col]]), .data[[tcr_col]] != "")
+
+  if (nrow(shared) > 0) {
+    gene_concordance <- shared %>%
+      group_by(tcr_gene = .data[[tcr_col]]) %>%
+      summarise(
+        n_cells       = n(),
+        n_concordant  = sum(.data[[rna_col]] == .data[[tcr_col]]),
+        concordance   = round(n_concordant / n_cells, 3),
+        top_rna_call  = names(sort(table(.data[[rna_col]]), decreasing=TRUE))[1],
+        .groups = "drop"
+      ) %>%
+      arrange(desc(n_cells))
+  } else {
+    gene_concordance <- tibble()
+  }
+
+  list(per_group=per_group, correlations=correlations,
+       gene_concordance=gene_concordance)
+}
+
+
+# ── 14.5  TCR gene expression heatmap ─────────────────────────────────────────
+
+#' Heatmap of average TCR gene expression per sample × subset group
+#'
+#' Computes mean normalised expression of each detected TCR gene across cells in
+#' each group, then plots a clustered heatmap (genes × groups).
+#'
+#' @param expr        Matrix (genes × cells) from load_h5ad_with_expression().
+#' @param meta        Data frame with barcode_aggr and group_vars columns.
+#' @param group_vars  Grouping columns (e.g., c("sample_id","subset")).
+#' @param chains      Character vector of chain prefixes to include.
+#'                    Default c("TRBV","TRAV","TRBJ","TRAJ").
+#' @param min_pct     Minimum fraction of cells with detectable expression
+#'                    for a gene to be shown (default 0.01 = 1%).
+#' @param title       Plot title.
+#' @return  Invisible NULL (pheatmap renders directly); also returns the
+#'          numeric matrix invisibly for downstream use.
+plot_tcr_expression_heatmap <- function(expr,
+                                         meta,
+                                         group_vars = c("sample_id","subset"),
+                                         chains     = c("TRBV","TRAV","TRBJ","TRAJ"),
+                                         min_pct    = 0.01,
+                                         title      = "TCR Gene Expression\n(mean log-normalised per group)") {
+
+  # Keep TCR genes present in expression matrix
+  tcr_all  <- unlist(TCR_GENES[intersect(chains, names(TCR_GENES))], use.names=FALSE)
+  tcr_keep <- intersect(tcr_all, rownames(expr))
+
+  if (length(tcr_keep) == 0) {
+    warning("No canonical TCR genes found in expression matrix rownames.")
+    return(invisible(NULL))
+  }
+  message("  TCR genes in matrix: ", length(tcr_keep))
+
+  sub_expr <- expr[tcr_keep, , drop=FALSE]
+
+  # Filter genes expressed in at least min_pct of cells
+  pct_expr <- Matrix::rowMeans(sub_expr > 0)
+  sub_expr <- sub_expr[pct_expr >= min_pct, , drop=FALSE]
+  if (nrow(sub_expr) == 0) {
+    warning("No TCR genes pass min_pct filter (", min_pct, ").")
+    return(invisible(NULL))
+  }
+  message("  Genes passing min_pct (", min_pct, "): ", nrow(sub_expr))
+
+  # Align barcodes
+  bc_common <- intersect(meta$barcode_aggr, colnames(sub_expr))
+  if (length(bc_common) == 0) {
+    warning("No barcode overlap between metadata and expression matrix.")
+    return(invisible(NULL))
+  }
+  meta_sub  <- meta[meta$barcode_aggr %in% bc_common, , drop=FALSE]
+  expr_sub  <- sub_expr[, bc_common, drop=FALSE]
+
+  # Build group labels
+  meta_sub$group_label <- apply(
+    meta_sub[, group_vars, drop=FALSE], 1,
+    function(x) paste(x, collapse=" | ")
+  )
+
+  # Compute mean expression per group
+  groups <- unique(meta_sub$group_label)
+  mean_mat <- sapply(groups, function(g) {
+    bc_g <- meta_sub$barcode_aggr[meta_sub$group_label == g]
+    if (length(bc_g) == 0) return(rep(NA_real_, nrow(expr_sub)))
+    rowMeans(as.matrix(expr_sub[, bc_g, drop=FALSE]), na.rm=TRUE)
+  })
+  rownames(mean_mat) <- rownames(expr_sub)
+  colnames(mean_mat) <- groups
+
+  # Drop all-NA columns
+  mean_mat <- mean_mat[, colSums(!is.na(mean_mat)) > 0, drop=FALSE]
+
+  # Annotation: colour bars by chain
+  chain_map <- sapply(rownames(mean_mat), function(g) {
+    ch <- sub("^(TRBV|TRAV|TRBJ|TRAJ|TRBD).*","\\1", g)
+    if (ch %in% c("TRBV","TRAV","TRBJ","TRAJ","TRBD")) ch else "Other"
+  })
+  row_ann <- data.frame(Chain=chain_map, row.names=rownames(mean_mat))
+  ann_col <- list(Chain=c(TRBV="#2166AC",TRAV="#EC4899",
+                            TRBJ="#22C55E",TRAJ="#A855F7",TRBD="#F59E0B"))
+
+  pheatmap::pheatmap(
+    mean_mat,
+    color            = colorRampPalette(c("white","#FEF3C7","#F59E0B","#DC2626"))(100),
+    main             = title,
+    annotation_row   = row_ann,
+    annotation_colors= ann_col,
+    cluster_rows     = TRUE,
+    cluster_cols     = TRUE,
+    fontsize_row     = 6,
+    fontsize_col     = 8,
+    border_color     = NA,
+    na_col           = "grey90",
+    show_rownames    = TRUE
+  )
+  invisible(mean_mat)
+}
+
+
+# ── 14.6  Scatter plots for RNA-seq vs TCR-seq comparison ────────────────────
+
+#' Scatter: H_RNA vs H_TCRseq per group, coloured by subset or sample
+#'
+#' @param comparison_result  Output of compare_rnaseq_vs_tcrseq().
+#' @param group_var          Column used to colour/label points.
+#' @param color_var          Column used for colour (default = group_var).
+#' @param chain_label        Label for the chain analysed (e.g., "TRBV").
+#' @return  ggplot2 object.
+plot_rnaseq_vs_tcrseq_scatter <- function(comparison_result,
+                                           group_var   = "sample_id",
+                                           color_var   = NULL,
+                                           chain_label = "TRBV") {
+  pg <- comparison_result$per_group
+  if (is.null(color_var)) color_var <- group_var
+
+  sp_txt <- ""
+  if (!is.null(comparison_result$correlations$spearman)) {
+    sp  <- comparison_result$correlations$spearman
+    sp_txt <- paste0("Spearman ρ = ", round(sp$estimate,3),
+                     "  (p = ", signif(sp$p.value,3), ")")
+  }
+
+  ggplot(pg, aes(H_tcrseq, H_rna, color=.data[[color_var]], label=.data[[group_var]])) +
+    geom_abline(slope=1, intercept=0, color="red", linetype="dotted", linewidth=.7) +
+    geom_smooth(method="lm", se=TRUE, color="grey40",
+                linetype="dashed", linewidth=.7) +
+    geom_point(size=3, alpha=.85) +
+    geom_text_repel(size=2.8, max.overlaps=15) +
+    scale_color_manual(
+      values=c(CD8="#D6604D",CD4="#2166AC",Treg="#4DAF4A",DP="#FF7F00",
+                DN="#9B59B6",Unknown="grey60"),
+      na.value="grey60"
+    ) +
+    labs(
+      title    = paste(chain_label, "Usage Diversity: RNA-seq vs TCR-seq"),
+      subtitle = sp_txt,
+      x        = paste0("H_", chain_label, " from TCR-seq V-gene calls"),
+      y        = paste0("H_", chain_label, " from RNA-seq expression"),
+      caption  = "Red dotted = 1:1. Points above = RNA-seq overestimates diversity."
+    ) +
+    theme_bw(base_size=12) + theme(legend.position="bottom")
+}
+
+#' Bar chart: per-gene concordance between RNA-seq and TCR-seq calls
+#'
+#' Shows what fraction of cells assigned to each TCR-seq gene have the same
+#' gene as their top RNA-seq expressed gene.
+#'
+#' @param comparison_result  Output of compare_rnaseq_vs_tcrseq().
+#' @param top_n              Number of top genes (by cell count) to show.
+#' @param chain_label        Label for the chain (e.g., "TRBV").
+#' @return  ggplot2 object.
+plot_gene_concordance_bar <- function(comparison_result,
+                                       top_n       = 20,
+                                       chain_label = "TRBV") {
+  gc <- comparison_result$gene_concordance
+
+  if (nrow(gc) == 0) {
+    warning("No gene concordance data available.")
+    return(ggplot() + annotate("text",x=.5,y=.5,label="No data") + theme_void())
+  }
+
+  gc_plot <- gc %>%
+    slice_max(n_cells, n=top_n) %>%
+    mutate(tcr_gene = factor(tcr_gene, levels=rev(tcr_gene)))
+
+  ggplot(gc_plot, aes(x=concordance, y=tcr_gene, fill=concordance)) +
+    geom_col(width=.7) +
+    geom_text(aes(label=paste0(round(concordance*100,0),"%")),
+              hjust=-.05, size=3) +
+    scale_fill_gradient2(low="#fee2e2", mid="#fef3c7", high="#d1fae5",
+                          midpoint=.5, limits=c(0,1), guide="none") +
+    scale_x_continuous(limits=c(0,1.1), labels=percent_format()) +
+    labs(
+      title    = paste(chain_label, "Per-Gene Concordance: RNA-seq vs TCR-seq"),
+      subtitle = "Fraction of cells where RNA-seq dominant gene matches TCR-seq call",
+      x        = "Concordance rate", y = chain_label
+    ) +
+    theme_bw(base_size=11)
+}

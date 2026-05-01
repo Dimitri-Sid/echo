@@ -104,6 +104,9 @@
   <a href="#trbv-usage">TRBV Usage</a>
   <a href="#alpha">Alpha Chain</a>
   <a href="#segments">All Segments</a>
+  <a href="#subsets">CD4/CD8/DP/DN</a>
+  <a href="#pseudo">Pseudoclonotypes</a>
+  <a href="#rnaseq">RNA-seq vs TCR-seq</a>
   <a href="#scatter">Proxy vs True</a>
   <a href="#clonality">Clonality</a>
   <a href="#ba">Bland-Altman</a>
@@ -237,7 +240,120 @@
   </div>
 </section>
 
-<!-- 6 · Proxy vs True -->
+<!-- 6 · CD4 vs CD8 -->
+<section id="subsets">
+  <h2><span class="num">6</span> CD4 vs CD8 Stratification</h2>
+  <p class="sec-desc">
+    The NanoString TCR Diversity assay is designed for defined T cell compartments, not bulk T cells.
+    The key validation question is: within CD8 T cells, does the TRBV proxy track CD8-specific clonotype diversity?
+    Each point = one sample within one subset.
+  </p>
+  <div class="tabs" id="sub-tabs">
+    <button class="tab-btn active" data-tab="sub-all">All datasets</button>
+    <button class="tab-btn" data-tab="sub-bt">Blum Tissue</button>
+    <button class="tab-btn" data-tab="sub-le">Lechner</button>
+    <button class="tab-btn" data-tab="sub-lu">Luoma</button>
+    <button class="tab-btn" data-tab="sub-bp">Blum PBMC</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="sub-all"><div class="plot-box" id="plot-sub-all" style="min-height:520px"></div></div>
+    <div class="tab-pane" id="sub-bt"><div class="grid-2"><div><div class="plot-box" id="plot-sub-bt-cd8"></div></div><div><div class="plot-box" id="plot-sub-bt-cd4"></div></div></div></div>
+    <div class="tab-pane" id="sub-le"><div class="grid-2"><div><div class="plot-box" id="plot-sub-le-cd8"></div></div><div><div class="plot-box" id="plot-sub-le-cd4"></div></div></div></div>
+    <div class="tab-pane" id="sub-lu"><div class="grid-2"><div><div class="plot-box" id="plot-sub-lu-cd8"></div></div><div><div class="plot-box" id="plot-sub-lu-cd4"></div></div></div></div>
+    <div class="tab-pane" id="sub-bp"><div class="grid-2"><div><div class="plot-box" id="plot-sub-bp-cd8"></div></div><div><div class="plot-box" id="plot-sub-bp-cd4"></div></div></div></div>
+  </div>
+  <div style="margin-top:16px" class="card">
+    <div class="plot-box" id="plot-sub-rho" style="min-height:340px"></div>
+  </div>
+</section>
+
+<!-- 7 · Pseudoclonotypes -->
+<section id="pseudo">
+  <h2><span class="num">7</span> Pseudoclonotype Recapitulation</h2>
+  <p class="sec-desc">
+    Cells sharing the same gene-combo string (e.g., TRAV:TRAJ:TRBV:TRBJ) are assigned the same
+    <em>pseudoclonotype</em> label. The analysis measures how faithfully each combo level recapitulates
+    true CDR3-based clonotypes — stratified by CD4 and CD8.
+  </p>
+  <div class="method-note" style="margin-bottom:20px">
+    <strong>Purity:</strong> of cells sharing a pseudoclonotype, what fraction share the dominant real clonotype? (high = good) ·
+    <strong>Collision:</strong> fraction of pseudoclonotypes containing &gt;1 real clonotype (low = good) ·
+    <strong>Split:</strong> fraction of real clonotypes spanning &gt;1 pseudoclonotype (low = good)
+  </div>
+  <div class="tabs" id="pseudo-tabs">
+    <button class="tab-btn active" data-tab="ps-summary">Summary (all datasets)</button>
+    <button class="tab-btn" data-tab="ps-purity">Purity by level</button>
+    <button class="tab-btn" data-tab="ps-scatter">H scatter</button>
+    <button class="tab-btn" data-tab="ps-heatmap">CD4 vs CD8 heatmap</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="ps-summary">
+      <div class="plot-box" id="plot-ps-summary" style="min-height:460px"></div>
+    </div>
+    <div class="tab-pane" id="ps-purity">
+      <div class="plot-box" id="plot-ps-purity" style="min-height:460px"></div>
+    </div>
+    <div class="tab-pane" id="ps-scatter">
+      <div class="plot-box" id="plot-ps-scatter" style="min-height:460px"></div>
+    </div>
+    <div class="tab-pane" id="ps-heatmap">
+      <div class="plot-box" id="plot-ps-heatmap" style="min-height:460px"></div>
+    </div>
+  </div>
+  <div class="tbl-wrap" style="margin-top:16px">
+    <table>
+      <thead><tr>
+        <th>Combo level</th><th>Resolution</th>
+        <th>Mean purity ↑</th><th>Collision ↓</th><th>Split ↓</th>
+        <th>Coverage</th><th>ρ with H_real</th>
+      </tr></thead>
+      <tbody id="pseudo-tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- RNA-seq vs TCR-seq -->
+<section id="rnaseq">
+  <h2><span class="num">8</span> RNA-seq vs TCR-seq Gene Usage</h2>
+  <p class="sec-desc">
+    For each cell, the dominant expressed TRBV/TRAV gene in the scRNA-seq matrix is compared to the
+    VDJ-sequencing-assigned gene call. <strong>Concordance</strong> = fraction of cells where both agree.
+    Datasets without a matched expression matrix show no data here.
+  </p>
+  <div class="tabs" id="rna-tabs">
+    <button class="tab-btn active" data-tab="rna-scatter">H diversity scatter</button>
+    <button class="tab-btn" data-tab="rna-conc">Per-gene concordance</button>
+    <button class="tab-btn" data-tab="rna-heatmap">TCR expression heatmap</button>
+  </div>
+  <div class="card">
+    <div class="tab-pane active" id="rna-scatter">
+      <div class="grid-2">
+        <div><div class="plot-box" id="plot-rna-htrbv"></div></div>
+        <div><div class="plot-box" id="plot-rna-htrav"></div></div>
+      </div>
+    </div>
+    <div class="tab-pane" id="rna-conc">
+      <div class="grid-2">
+        <div><div class="plot-box" id="plot-rna-conc-trbv" style="min-height:500px"></div></div>
+        <div><div class="plot-box" id="plot-rna-conc-trav" style="min-height:500px"></div></div>
+      </div>
+    </div>
+    <div class="tab-pane" id="rna-heatmap">
+      <p style="color:var(--muted);font-size:13px;padding:12px">
+        The TCR expression heatmap (average log-normalised expression per sample × subset) is
+        rendered as a PDF by the R script (<code>&lt;dataset&gt;_tcr_expression_heatmap.pdf</code>).
+        Below is the interactive version showing mock data; replace <code>MOCK.heatmap</code> in
+        the script block with real CSV output to populate with actual values.
+      </p>
+      <div class="plot-box" id="plot-rna-heatmap" style="min-height:500px"></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="plot-box" id="plot-rna-concordance-bar" style="min-height:280px"></div>
+  </div>
+</section>
+
+<!-- 9 · Proxy vs True -->
 <section id="scatter">
   <h2><span class="num">6</span> TRBV Proxy vs True Clonotype Diversity</h2>
   <p class="sec-desc">Each point = one sample. Red dotted line = 1:1 reference. Points above it = proxy overestimates diversity.</p>
@@ -714,6 +830,328 @@ DS_KEYS.forEach((k,i) => {
     margin:{t:60,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
   },cfg);
 })();
+
+// ── CD4/CD8/DP/DN subset stratification ──────────────────────────────────────
+
+const SUBSET_COLORS_JS = {CD8:"#D6604D",CD4:"#2166AC",Treg:"#4DAF4A",DP:"#FF7F00",DN:"#9B59B6"};
+
+// Mock per-subset scatter data (each dataset × subset)
+const SUBSET_MOCK = {
+  bt:[
+    {s:"S01",subset:"CD8",H_TRBV:2.61,H_clono:2.90},{s:"S02",subset:"CD8",H_TRBV:2.31,H_clono:2.62},
+    {s:"S03",subset:"CD8",H_TRBV:2.80,H_clono:3.12},{s:"S04",subset:"CD8",H_TRBV:1.78,H_clono:2.05},
+    {s:"S01",subset:"CD4",H_TRBV:2.95,H_clono:3.21},{s:"S02",subset:"CD4",H_TRBV:2.68,H_clono:2.91},
+    {s:"S03",subset:"CD4",H_TRBV:3.05,H_clono:3.34},{s:"S04",subset:"CD4",H_TRBV:2.11,H_clono:2.38},
+    {s:"S01",subset:"DP", H_TRBV:2.40,H_clono:2.50},{s:"S02",subset:"DP", H_TRBV:2.10,H_clono:2.25},
+    {s:"S01",subset:"DN", H_TRBV:1.95,H_clono:1.80},{s:"S02",subset:"DN", H_TRBV:2.20,H_clono:2.10}
+  ],
+  le:[
+    {s:"P01",subset:"CD8",H_TRBV:2.21,H_clono:2.48},{s:"P02",subset:"CD8",H_TRBV:1.45,H_clono:1.62},
+    {s:"P03",subset:"CD8",H_TRBV:2.58,H_clono:2.85},{s:"P01",subset:"CD4",H_TRBV:2.65,H_clono:2.92},
+    {s:"P02",subset:"CD4",H_TRBV:1.80,H_clono:2.01},{s:"P03",subset:"CD4",H_TRBV:2.88,H_clono:3.10}
+  ],
+  lu:[
+    {s:"UC01",subset:"CD8",H_TRBV:2.31,H_clono:2.55},{s:"CD01",subset:"CD8",H_TRBV:2.53,H_clono:2.82},
+    {s:"HC01",subset:"CD8",H_TRBV:2.76,H_clono:3.05},{s:"UC01",subset:"CD4",H_TRBV:2.65,H_clono:2.88},
+    {s:"CD01",subset:"CD4",H_TRBV:2.19,H_clono:2.41},{s:"HC01",subset:"CD4",H_TRBV:3.10,H_clono:3.35}
+  ],
+  bp:[
+    {s:"D01",subset:"CD8",H_TRBV:2.68,H_clono:2.94},{s:"D02",subset:"CD8",H_TRBV:2.11,H_clono:2.37},
+    {s:"D03",subset:"CD8",H_TRBV:2.85,H_clono:3.15},{s:"D04",subset:"CD8",H_TRBV:1.72,H_clono:1.98},
+    {s:"D01",subset:"CD4",H_TRBV:2.98,H_clono:3.22},{s:"D02",subset:"CD4",H_TRBV:2.42,H_clono:2.65},
+    {s:"D01",subset:"DP", H_TRBV:2.55,H_clono:2.62},{s:"D02",subset:"DP", H_TRBV:2.25,H_clono:2.31},
+    {s:"D01",subset:"DN", H_TRBV:2.05,H_clono:1.92}
+  ]
+};
+
+function subsetScatterAll(){
+  const subsets=["CD8","CD4","DP","DN","Treg"];
+  const traces=[];
+  DS_KEYS.forEach((k,i)=>{
+    const d=SUBSET_MOCK[k]||[];
+    subsets.forEach(ss=>{
+      const pts=d.filter(r=>r.subset===ss);
+      if(!pts.length) return;
+      traces.push({
+        x:pts.map(r=>r.H_TRBV), y:pts.map(r=>r.H_clono),
+        mode:"markers+text", text:pts.map(r=>r.s+"<br>("+r.subset+")"),
+        textposition:"top center", textfont:{size:8},
+        marker:{color:SUBSET_COLORS_JS[ss]||"grey",size:9,opacity:.8,
+                symbol:["circle","square","diamond","cross","triangle-up"][i]||"circle"},
+        name:DS_NAMES[i]+" "+ss, legendgroup:ss, showlegend:true, type:"scatter"
+      });
+    });
+  });
+  const allX=traces.flatMap(t=>t.x), allY=traces.flatMap(t=>t.y);
+  const mn=Math.min(...allX,...allY)*.9, mx=Math.max(...allX,...allY)*1.05;
+  traces.unshift({x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},
+    showlegend:false,hoverinfo:"none"});
+  Plotly.newPlot("plot-sub-all", traces, {
+    title:{text:"H<sub>TRBV</sub> vs H<sub>clonotype</sub> — CD4 / CD8 / DP / DN (All Datasets)",font:{size:13}},
+    xaxis:{title:"H<sub>TRBV</sub> (proxy)",range:[mn,mx]},
+    yaxis:{title:"H<sub>clonotype</sub> (true)",range:[mn,mx]},
+    legend:{orientation:"v",groupclick:"toggleitem"},
+    margin:{t:60,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+}
+subsetScatterAll();
+
+// Per-dataset subset plots
+DS_KEYS.forEach((k,i)=>{
+  ["cd8","cd4"].forEach(ss=>{
+    const pts=(SUBSET_MOCK[k]||[]).filter(r=>r.subset===ss.toUpperCase());
+    const el=document.getElementById(`plot-sub-${k}-${ss}`);
+    if(!el) return;
+    if(!pts.length){
+      Plotly.newPlot(el,[],{title:{text:`No ${ss.toUpperCase()} data — ${DS_NAMES[i]}`,font:{size:12}},
+        plot_bgcolor:"#fafafa",paper_bgcolor:"white"},cfg);
+      return;
+    }
+    const xs=pts.map(r=>r.H_TRBV), ys=pts.map(r=>r.H_clono);
+    const mn=Math.min(...xs,...ys)*.9, mx=Math.max(...xs,...ys)*1.05;
+    Plotly.newPlot(el,[
+      {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false},
+      {x:xs,y:ys,mode:"markers+text",text:pts.map(r=>r.s),
+       textposition:"top center",textfont:{size:9},
+       marker:{color:SUBSET_COLORS_JS[ss.toUpperCase()],size:10,opacity:.85},
+       type:"scatter",name:ss.toUpperCase()}
+    ],{
+      title:{text:`${ss.toUpperCase()} — H<sub>TRBV</sub> vs H<sub>clonotype</sub> — ${DS_NAMES[i]}`,font:{size:12}},
+      xaxis:{title:"H<sub>TRBV</sub>",range:[mn,mx]},
+      yaxis:{title:"H<sub>clonotype</sub>",range:[mn,mx]},
+      margin:{t:50,b:50},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  });
+});
+
+// Subset rho bar
+(function(){
+  const subsetsShow=["CD8","CD4","DP","DN"];
+  // Mock: CD8 typically higher rho than CD4 (more oligoclonal)
+  const rhos={CD8:0.88, CD4:0.72, DP:0.65, DN:0.58};
+  Plotly.newPlot("plot-sub-rho",[{
+    x:Object.values(rhos), y:Object.keys(rhos),
+    type:"bar",orientation:"h",
+    marker:{color:Object.keys(rhos).map(s=>SUBSET_COLORS_JS[s])},
+    text:Object.values(rhos).map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
+    hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
+  }],{
+    title:{text:"Mean Spearman ρ (H<sub>TRBV</sub> vs H<sub>clonotype</sub>) by T Cell Subset",font:{size:13}},
+    xaxis:{title:"Mean Spearman ρ",range:[0,1.1]},yaxis:{},
+    margin:{t:50,b:50,l:70},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+})();
+
+
+// ── Pseudoclonotype plots ─────────────────────────────────────────────────────
+
+const PSEUDO_LEVELS_JS=["TRBV","TRBJ","VJ_beta","TRAV","VJ_alpha","VA_VB","Full_paired"];
+const PSEUDO_COLORS={
+  TRBV:"#3b82f6",TRBJ:"#22c55e",VJ_beta:"#2563eb",
+  TRAV:"#ec4899",VJ_alpha:"#db2777",VA_VB:"#7c3aed",Full_paired:"#059669"
+};
+// Mock summary stats per level (replace with real CSV)
+const PSEUDO_SUMMARY=[
+  {label:"TRBV",      purity:.52, collision:.81, split:.03, coverage:.89, rho:.65},
+  {label:"TRBJ",      purity:.58, collision:.76, split:.04, coverage:.91, rho:.70},
+  {label:"VJ_beta",   purity:.71, collision:.58, split:.06, coverage:.87, rho:.80},
+  {label:"TRAV",      purity:.61, collision:.68, split:.04, coverage:.72, rho:.55},
+  {label:"VJ_alpha",  purity:.73, collision:.55, split:.05, coverage:.69, rho:.74},
+  {label:"VA_VB",     purity:.79, collision:.42, split:.08, coverage:.64, rho:.85},
+  {label:"Full_paired",purity:.88,collision:.21, split:.11, coverage:.61, rho:.91}
+];
+
+// Populate table
+(function(){
+  const tbody=document.getElementById("pseudo-tbody");
+  const resDescs={TRBV:"V-beta only",TRBJ:"J-beta only",VJ_beta:"Vβ:Jβ combo",
+    TRAV:"V-alpha only",VJ_alpha:"Vα:Jα combo",VA_VB:"Vα:Vβ paired",
+    Full_paired:"Vα:Jα:Vβ:Jβ (full)"};
+  PSEUDO_SUMMARY.forEach(d=>{
+    const purityCls=d.purity>=.8?"rho-high":d.purity>=.6?"rho-med":"rho-low";
+    tbody.innerHTML+=`<tr>
+      <td><strong>${d.label}</strong></td>
+      <td style="color:var(--muted);font-size:12px">${resDescs[d.label]}</td>
+      <td><span class="rho-badge ${purityCls}">${(d.purity*100).toFixed(0)}%</span></td>
+      <td>${(d.collision*100).toFixed(0)}%</td>
+      <td>${(d.split*100).toFixed(0)}%</td>
+      <td>${(d.coverage*100).toFixed(0)}%</td>
+      <td>${d.rho.toFixed(2)}</td>
+    </tr>`;
+  });
+})();
+
+// Summary 3-panel (purity / collision / split)
+(function(){
+  const lvls=PSEUDO_SUMMARY.map(d=>d.label);
+  const cols=lvls.map(l=>PSEUDO_COLORS[l]);
+
+  function panel(metric,title,color_arr){
+    return {x:PSEUDO_SUMMARY.map(d=>d[metric]),y:lvls,type:"bar",orientation:"h",
+      marker:{color:color_arr||cols},name:title,
+      text:PSEUDO_SUMMARY.map(d=>`${(d[metric]*100).toFixed(0)}%`),textposition:"outside",
+      hovertemplate:`%{y}: ${title} %{x:.2%}<extra></extra>`};
+  }
+
+  Plotly.newPlot("plot-ps-summary",[panel("purity","Purity",cols)],{
+    title:{text:"Pseudoclonotype Purity by Combo Level — Mean across Datasets",font:{size:13}},
+    xaxis:{title:"Weighted purity",range:[0,1.1],tickformat:".0%"},yaxis:{autorange:"reversed"},
+    margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+
+  // Collision & split together
+  Plotly.newPlot("plot-ps-purity",[
+    panel("collision","Collision rate",lvls.map(()=>"#f87171")),
+    panel("split","Split rate",lvls.map(()=>"#fb923c"))
+  ],{
+    title:{text:"Collision Rate & Split Rate by Combo Level",font:{size:13}},
+    barmode:"group",
+    xaxis:{title:"Rate",range:[0,.95],tickformat:".0%"},yaxis:{autorange:"reversed"},
+    legend:{orientation:"h",y:-.15},
+    margin:{t:50,b:80,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+
+  // H scatter (rho per level)
+  const mockPts=PSEUDO_SUMMARY.map(d=>({label:d.label,rho:d.rho,
+    xs:Array.from({length:8},()=>1.5+Math.random()*1.5),
+    ys:Array.from({length:8},(_,i)=>1.5+Math.random()*1.5*(0.5+0.5*d.rho))}));
+  const scTraces=mockPts.map(d=>({
+    x:d.xs,y:d.ys,mode:"markers",name:d.label,
+    marker:{color:PSEUDO_COLORS[d.label],size:8,opacity:.75},
+    hovertemplate:`${d.label}<br>H_pseudo=%{x:.2f}<br>H_real=%{y:.2f}<extra></extra>`
+  }));
+  Plotly.newPlot("plot-ps-scatter",scTraces,{
+    title:{text:"H(pseudoclonotype) vs H(real clonotype) — by Combo Level",font:{size:13}},
+    xaxis:{title:"H(pseudoclonotype)"},yaxis:{title:"H(real CDR3 clonotype)"},
+    legend:{orientation:"h",y:-.15},
+    margin:{t:50,b:80},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+
+  // Purity heatmap: level × subset
+  const subsetsH=["CD8","CD4","DP","DN"];
+  // Mock purity values: CD8 best, DP lowest
+  const purMatrix=PSEUDO_SUMMARY.map(d=>[
+    d.purity+.02, d.purity-.04, d.purity-.10, d.purity-.15
+  ].map(v=>Math.max(0,Math.min(1,v))));
+  Plotly.newPlot("plot-ps-heatmap",[{
+    z:purMatrix, x:subsetsH, y:PSEUDO_SUMMARY.map(d=>d.label),
+    type:"heatmap",
+    colorscale:[[0,"#fee2e2"],[.5,"#fef3c7"],[1,"#d1fae5"]],
+    text:purMatrix.map(row=>row.map(v=>`${(v*100).toFixed(0)}%`)),
+    texttemplate:"%{text}",
+    hovertemplate:"Level: %{y}<br>Subset: %{x}<br>Purity: %{text}<extra></extra>",
+    colorbar:{title:"Purity",tickformat:".0%"}
+  }],{
+    title:{text:"Mean Pseudoclonotype Purity — Combo Level × Subset",font:{size:13}},
+    xaxis:{title:"T cell subset"},yaxis:{title:"Gene-combo level",autorange:"reversed"},
+    margin:{t:50,b:60,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+})();
+
+
+// ── RNA-seq vs TCR-seq plots ──────────────────────────────────────────────────
+
+// Mock: H from RNA-seq vs H from TCR-seq per sample (both chains)
+const RNA_MOCK_TRBV=[
+  {ds:"blum_tissue",s:"S01",H_tcr:2.81,H_rna:2.65,subset:"CD8"},
+  {ds:"blum_tissue",s:"S02",H_tcr:2.54,H_rna:2.41,subset:"CD4"},
+  {ds:"blum_tissue",s:"S03",H_tcr:2.92,H_rna:2.78,subset:"CD8"},
+  {ds:"blum_tissue",s:"S04",H_tcr:1.98,H_rna:1.82,subset:"CD8"},
+  {ds:"lechner",     s:"P01",H_tcr:2.41,H_rna:2.28,subset:"CD8"},
+  {ds:"lechner",     s:"P02",H_tcr:1.65,H_rna:1.54,subset:"CD8"},
+  {ds:"luoma",       s:"UC01",H_tcr:2.51,H_rna:2.35,subset:"CD8"},
+  {ds:"luoma",       s:"CD01",H_tcr:2.73,H_rna:2.61,subset:"CD4"},
+  {ds:"blum_pbmc",   s:"D01",H_tcr:2.88,H_rna:2.72,subset:"CD4"},
+  {ds:"blum_pbmc",   s:"D02",H_tcr:2.31,H_rna:2.19,subset:"CD8"}
+];
+const RNA_MOCK_TRAV=RNA_MOCK_TRBV.map(d=>({...d,H_tcr:d.H_tcr*.85,H_rna:d.H_rna*.78}));
+
+function rnascatterPlot(data,chainLabel,elId){
+  const rho=spearman(data.map(d=>d.H_tcr),data.map(d=>d.H_rna));
+  const all=[...data.map(d=>d.H_tcr),...data.map(d=>d.H_rna)];
+  const mn=Math.min(...all)*.9, mx=Math.max(...all)*1.05;
+  Plotly.newPlot(elId,[
+    {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false},
+    {x:data.map(d=>d.H_tcr),y:data.map(d=>d.H_rna),
+     mode:"markers+text",text:data.map(d=>d.s),
+     textposition:"top center",textfont:{size:8},
+     marker:{color:data.map(d=>DS_COLORS[d.ds]||"grey"),size:9,opacity:.85},
+     type:"scatter",name:"Sample"}
+  ],{
+    title:{text:`H<sub>${chainLabel}</sub>: RNA-seq vs TCR-seq<br><sub>Spearman ρ = ${rho.toFixed(3)}</sub>`,font:{size:13}},
+    xaxis:{title:`H<sub>${chainLabel}</sub> from TCR-seq`,range:[mn,mx]},
+    yaxis:{title:`H<sub>${chainLabel}</sub> from RNA-seq`,range:[mn,mx]},
+    margin:{t:60,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+}
+rnascatterPlot(RNA_MOCK_TRBV,"TRBV","plot-rna-htrbv");
+rnascatterPlot(RNA_MOCK_TRAV,"TRAV","plot-rna-htrav");
+
+// Per-gene concordance bars (TRBV)
+(function(){
+  const genes=GENES.TRBV.slice(0,18);
+  const conc=genes.map(()=>Math.random()*.4+.45);
+  Plotly.newPlot("plot-rna-conc-trbv",[{
+    y:genes, x:conc, type:"bar", orientation:"h",
+    marker:{color:conc.map(v=>v>=.7?"#d1fae5":v>=.5?"#fef3c7":"#fee2e2")},
+    text:conc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside",
+    hovertemplate:"%{y}: %{text}<extra></extra>"
+  }],{
+    title:{text:"TRBV Per-Gene Concordance: RNA-seq vs TCR-seq",font:{size:13}},
+    xaxis:{title:"Concordance rate",range:[0,1.1],tickformat:".0%"},
+    yaxis:{autorange:"reversed"},
+    margin:{t:50,b:50,l:100},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+
+  const travGenes=GENES.TRAV.slice(0,18);
+  const travConc=travGenes.map(()=>Math.random()*.35+.40);
+  Plotly.newPlot("plot-rna-conc-trav",[{
+    y:travGenes, x:travConc, type:"bar", orientation:"h",
+    marker:{color:travConc.map(v=>v>=.7?"#d1fae5":v>=.5?"#fef3c7":"#fee2e2")},
+    text:travConc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside",
+    hovertemplate:"%{y}: %{text}<extra></extra>"
+  }],{
+    title:{text:"TRAV Per-Gene Concordance: RNA-seq vs TCR-seq",font:{size:13}},
+    xaxis:{title:"Concordance rate",range:[0,1.1],tickformat:".0%"},
+    yaxis:{autorange:"reversed"},
+    margin:{t:50,b:50,l:110},plot_bgcolor:"#fafaja",paper_bgcolor:"white"
+  },cfg);
+})();
+
+// Expression heatmap (mock: genes × sample×subset)
+(function(){
+  const genesMock=GENES.TRBV.slice(0,12).concat(GENES.TRAV.slice(0,8));
+  const cols=["S01 CD8","S02 CD8","S03 CD4","S04 CD4","S01 DP","S02 DN"];
+  const z=genesMock.map(g=>cols.map(()=>Math.random()*2.5));
+  Plotly.newPlot("plot-rna-heatmap",[{
+    z, x:cols, y:genesMock, type:"heatmap",
+    colorscale:[[0,"white"],[.4,"#FEF3C7"],[.7,"#F59E0B"],[1,"#DC2626"]],
+    colorbar:{title:"Mean log-norm expr."}
+  }],{
+    title:{text:"TCR Gene Expression Heatmap (mock — run R script for real values)",font:{size:13}},
+    xaxis:{title:"Sample × Subset"},yaxis:{title:"TCR gene",autorange:"reversed"},
+    margin:{t:60,b:80,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+})();
+
+// Concordance summary bar across datasets
+(function(){
+  const dsNames=DS_NAMES;
+  const trbvConc=[0.68,0.71,0.65,0.73];  // mock
+  const travConc=[0.55,0.58,0.52,0.61];   // mock (lower — noisier)
+  Plotly.newPlot("plot-rna-concordance-bar",[
+    {name:"TRBV",x:trbvConc,y:dsNames,type:"bar",orientation:"h",
+     marker:{color:"#2166AC"},text:trbvConc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside"},
+    {name:"TRAV",x:travConc,y:dsNames,type:"bar",orientation:"h",
+     marker:{color:"#EC4899"},text:travConc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside"}
+  ],{
+    title:{text:"RNA-seq vs TCR-seq Gene Call Concordance by Dataset",font:{size:13}},
+    barmode:"group",xaxis:{title:"Concordance rate",range:[0,1.0],tickformat:".0%"},
+    legend:{orientation:"h",y:-.2},
+    margin:{t:50,b:80,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  },cfg);
+})();
+
 
 // ── Resolution ladder ─────────────────────────────────────────────────────────
 (function(){
