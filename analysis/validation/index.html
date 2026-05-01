@@ -462,9 +462,33 @@
 
 <footer>Sidiropoulos Lab · ECHO Project · <span id="gen-date"></span> · <code>R/tcr_diversity_functions.R</code></footer>
 
+
 <script>
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// =============================================================================
+// Real data loader — reads CSVs from data/ directory
+// =============================================================================
+
+const cfg = {responsive:true};
+
+// ── Gene lists (no CSV needed) ────────────────────────────────────────────────
+const GENES = {
+  TRBV:["TRBV1","TRBV2","TRBV3-1","TRBV4-1","TRBV4-2","TRBV4-3","TRBV5-1","TRBV5-4","TRBV5-5","TRBV5-6","TRBV5-8","TRBV6-1","TRBV6-2","TRBV6-3","TRBV6-4","TRBV6-5","TRBV6-6","TRBV6-7","TRBV6-8","TRBV6-9","TRBV7-2","TRBV7-3","TRBV7-4","TRBV7-6","TRBV7-7","TRBV7-8","TRBV7-9","TRBV9","TRBV10-1","TRBV10-2","TRBV10-3","TRBV11-1","TRBV11-2","TRBV11-3","TRBV12-1","TRBV12-2","TRBV12-3","TRBV12-4","TRBV13","TRBV14","TRBV15","TRBV16","TRBV17","TRBV18","TRBV19","TRBV20-1","TRBV24-1","TRBV25-1","TRBV27","TRBV28","TRBV29-1","TRBV30"],
+  TRBJ:["TRBJ1-1","TRBJ1-2","TRBJ1-3","TRBJ1-4","TRBJ1-5","TRBJ1-6","TRBJ2-1","TRBJ2-2","TRBJ2-3","TRBJ2-4","TRBJ2-5","TRBJ2-6","TRBJ2-7"],
+  TRAV:["TRAV1-1","TRAV1-2","TRAV2","TRAV3","TRAV4","TRAV5","TRAV6","TRAV7","TRAV8-1","TRAV8-2","TRAV8-3","TRAV8-4","TRAV9-1","TRAV9-2","TRAV10","TRAV12-1","TRAV12-2","TRAV12-3","TRAV13-1","TRAV13-2","TRAV14DV4","TRAV16","TRAV17","TRAV19","TRAV20","TRAV21","TRAV22","TRAV23DV6","TRAV24","TRAV25","TRAV26-1","TRAV26-2","TRAV27","TRAV29DV5","TRAV30","TRAV34","TRAV35","TRAV36DV7","TRAV38-1","TRAV38-2DV8","TRAV39","TRAV40","TRAV41"],
+  TRAJ:["TRAJ1","TRAJ2","TRAJ3","TRAJ4","TRAJ5","TRAJ6","TRAJ7","TRAJ8","TRAJ9","TRAJ10","TRAJ11","TRAJ12","TRAJ13","TRAJ14","TRAJ15","TRAJ16","TRAJ17","TRAJ18","TRAJ19","TRAJ20","TRAJ21","TRAJ22","TRAJ23","TRAJ24","TRAJ25","TRAJ26","TRAJ27","TRAJ28","TRAJ29","TRAJ30","TRAJ31","TRAJ32","TRAJ33","TRAJ34","TRAJ35","TRAJ36","TRAJ37","TRAJ38","TRAJ39","TRAJ40","TRAJ41","TRAJ42","TRAJ43","TRAJ44","TRAJ45","TRAJ46","TRAJ47","TRAJ48","TRAJ49","TRAJ50","TRAJ51","TRAJ52","TRAJ53","TRAJ54","TRAJ55","TRAJ56","TRAJ57","TRAJ58","TRAJ59","TRAJ60","TRAJ61"]
+};
+
+const DS_COLORS = {lechner:"#D6604D", luoma:"#4DAF4A", blum_pbmc:"#9B59B6", blum_tissue:"#2166AC"};
+const DS_LABELS = {lechner:"Lechner (Thyroiditis CD8)", luoma:"Luoma (Colitis CD8)", blum_pbmc:"Blum PBMC", blum_tissue:"Blum Tissue"};
+const SUBSET_COLORS = {CD8:"#D6604D",CD4:"#2166AC",DP:"#FF7F00",DN:"#9B59B6",Treg:"#4DAF4A"};
+const SEG_COLORS = {TRBV:"#3b82f6",TRBJ:"#22c55e",VJ_beta:"#2563eb",TRAV:"#ec4899",VJ_alpha:"#db2777",VA_VB:"#7c3aed",Full_paired:"#059669",TRBD:"#f59e0b",TRAJ:"#a855f7"};
+
+// Gene chips
 document.getElementById("gen-date").textContent = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+["TRBV","TRBJ","TRAV","TRAJ"].forEach(chain => {
+  const el = document.getElementById(chain.toLowerCase()+"-chips");
+  if(el) el.innerHTML = GENES[chain].map(g=>`<span class="gene-chip ${chain.toLowerCase()}">${g}</span>`).join("");
+});
 
 // Tab system
 document.querySelectorAll(".tabs").forEach(tg => {
@@ -473,710 +497,567 @@ document.querySelectorAll(".tabs").forEach(tg => {
       tg.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       const tid = btn.dataset.tab;
-      tg.nextElementSibling.querySelectorAll(".tab-pane").forEach(p => {
-        p.classList.toggle("active", p.id === tid);
-      });
+      tg.nextElementSibling.querySelectorAll(".tab-pane").forEach(p => p.classList.toggle("active", p.id === tid));
       const pel = document.querySelector("#"+tid+" [id^='plot-']");
-      if (pel) Plotly.Plots.resize(pel);
+      if(pel) Plotly.Plots.resize(pel);
     });
   });
 });
 
 // Nav scroll spy
-const sections = document.querySelectorAll("section[id]");
+const secs = document.querySelectorAll("section[id]");
 window.addEventListener("scroll", () => {
-  let cur="";
-  sections.forEach(s => { if(window.scrollY >= s.offsetTop-120) cur=s.id; });
-  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active", a.getAttribute("href")==="#"+cur));
+  let cur=""; secs.forEach(s=>{if(window.scrollY>=s.offsetTop-120)cur=s.id;});
+  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("active",a.getAttribute("href")==="#"+cur));
 },{passive:true});
 
-// ── Gene chips ────────────────────────────────────────────────────────────────
-const GENES = {
-  TRBV:["TRBV1","TRBV2","TRBV3-1","TRBV4-1","TRBV4-2","TRBV4-3","TRBV5-1","TRBV5-4","TRBV5-5","TRBV5-6","TRBV5-8","TRBV6-1","TRBV6-2","TRBV6-3","TRBV6-4","TRBV6-5","TRBV6-6","TRBV6-7","TRBV6-8","TRBV6-9","TRBV7-2","TRBV7-3","TRBV7-4","TRBV7-6","TRBV7-7","TRBV7-8","TRBV7-9","TRBV9","TRBV10-1","TRBV10-2","TRBV10-3","TRBV11-1","TRBV11-2","TRBV11-3","TRBV12-1","TRBV12-2","TRBV12-3","TRBV12-4","TRBV13","TRBV14","TRBV15","TRBV16","TRBV17","TRBV18","TRBV19","TRBV20-1","TRBV24-1","TRBV25-1","TRBV27","TRBV28","TRBV29-1","TRBV30"],
-  TRBJ:["TRBJ1-1","TRBJ1-2","TRBJ1-3","TRBJ1-4","TRBJ1-5","TRBJ1-6","TRBJ2-1","TRBJ2-2","TRBJ2-3","TRBJ2-4","TRBJ2-5","TRBJ2-6","TRBJ2-7"],
-  TRAV:["TRAV1-1","TRAV1-2","TRAV2","TRAV3","TRAV4","TRAV5","TRAV6","TRAV7","TRAV8-1","TRAV8-2","TRAV8-3","TRAV8-4","TRAV9-1","TRAV9-2","TRAV10","TRAV12-1","TRAV12-2","TRAV12-3","TRAV13-1","TRAV13-2","TRAV14DV4","TRAV16","TRAV17","TRAV19","TRAV20","TRAV21","TRAV22","TRAV23DV6","TRAV24","TRAV25","TRAV26-1","TRAV26-2","TRAV27","TRAV29DV5","TRAV30","TRAV34","TRAV35","TRAV36DV7","TRAV38-1","TRAV38-2DV8","TRAV39","TRAV40","TRAV41"],
-  TRAJ:["TRAJ1","TRAJ2","TRAJ3","TRAJ4","TRAJ5","TRAJ6","TRAJ7","TRAJ8","TRAJ9","TRAJ10","TRAJ11","TRAJ12","TRAJ13","TRAJ14","TRAJ15","TRAJ16","TRAJ17","TRAJ18","TRAJ19","TRAJ20","TRAJ21","TRAJ22","TRAJ23","TRAJ24","TRAJ25","TRAJ26","TRAJ27","TRAJ28","TRAJ29","TRAJ30","TRAJ31","TRAJ32","TRAJ33","TRAJ34","TRAJ35","TRAJ36","TRAJ37","TRAJ38","TRAJ39","TRAJ40","TRAJ41","TRAJ42","TRAJ43","TRAJ44","TRAJ45","TRAJ46","TRAJ47","TRAJ48","TRAJ49","TRAJ50","TRAJ51","TRAJ52","TRAJ53","TRAJ54","TRAJ55","TRAJ56","TRAJ57","TRAJ58","TRAJ59","TRAJ60","TRAJ61"]
-};
-["TRBV","TRBJ","TRAV","TRAJ"].forEach(chain => {
-  const el = document.getElementById(chain.toLowerCase()+"-chips");
-  if(el) el.innerHTML = GENES[chain].map(g => `<span class="gene-chip ${chain.toLowerCase()}">${g}</span>`).join("");
-});
+// ── CSV parser ────────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g,"").trim());
+  return lines.slice(1).map(line => {
+    const vals = []; let cur = "", inq = false;
+    for (let i=0; i<line.length; i++) {
+      const c = line[i];
+      if (c==='"') { inq=!inq; }
+      else if (c==="," && !inq) { vals.push(cur.trim()); cur=""; }
+      else cur+=c;
+    }
+    vals.push(cur.trim());
+    const obj = {};
+    headers.forEach((h,i) => { obj[h] = vals[i] !== undefined ? vals[i].replace(/^"|"$/g,"") : ""; });
+    return obj;
+  });
+}
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const DS_COLORS = {"blum_tissue":"#2166AC","lechner":"#D6604D","luoma":"#4DAF4A","blum_pbmc":"#9B59B6"};
-const DS_KEYS   = ["bt","le","lu","bp"];
-const DS_IDS    = ["blum_tissue","lechner","luoma","blum_pbmc"];
-const DS_NAMES  = ["Blum Tissue","Lechner","Luoma","Blum PBMC"];
-const DS_EL     = ["bt","le","lu","bp"];
+function num(v) { const n=parseFloat(v); return isNaN(n)?null:n; }
 
-// Segment list with typical rho values (replace with real CSV data)
-const SEGMENTS = [
-  {label:"TRBD",       rho:0.41, color:"#f59e0b"},
-  {label:"TRAV",       rho:0.55, color:"#ec4899"},
-  {label:"TRAJ",       rho:0.58, color:"#a855f7"},
-  {label:"TRBV",       rho:0.65, color:"#3b82f6"},
-  {label:"TRBJ",       rho:0.70, color:"#22c55e"},
-  {label:"VJ_alpha",   rho:0.74, color:"#db2777"},
-  {label:"VJ_beta",    rho:0.80, color:"#2563eb"},
-  {label:"VA_VB",      rho:0.85, color:"#7c3aed"},
-  {label:"Full_paired",rho:0.91, color:"#059669"}
-];
+// ── Show loading state ────────────────────────────────────────────────────────
+function showLoading(elId) {
+  const el = document.getElementById(elId);
+  if(el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:#64748b;font-size:14px">Loading real data...</div>';
+}
 
-const MOCK = {
-  bt: {
-    cells:11420,samples:8,clones:2341,
-    rho:0.93,rho_p:0.001,pearson_r:0.91,rho_clon:0.90,
-    segs:{TRBD:0.38,TRAV:0.52,TRAJ:0.56,TRBV:0.93,TRBJ:0.73,VJ_alpha:0.71,VJ_beta:0.82,VA_VB:0.87,Full_paired:0.93},
-    rows:[
-      {s:"S01",H_TRBV:2.81,H_clono:3.10,TRBV_clon:0.21,true_clon:0.18},
-      {s:"S02",H_TRBV:2.54,H_clono:2.87,TRBV_clon:0.28,true_clon:0.24},
-      {s:"S03",H_TRBV:2.92,H_clono:3.24,TRBV_clon:0.17,true_clon:0.14},
-      {s:"S04",H_TRBV:1.98,H_clono:2.30,TRBV_clon:0.44,true_clon:0.40},
-      {s:"S05",H_TRBV:2.67,H_clono:2.95,TRBV_clon:0.24,true_clon:0.21},
-      {s:"S06",H_TRBV:2.43,H_clono:2.71,TRBV_clon:0.30,true_clon:0.28},
-      {s:"S07",H_TRBV:3.01,H_clono:3.35,TRBV_clon:0.13,true_clon:0.10},
-      {s:"S08",H_TRBV:1.75,H_clono:1.95,TRBV_clon:0.52,true_clon:0.48}
-    ],
-    fail_genes:["TRBV5-1","TRBV12-3","TRBV20-1","TRBV7-2","TRBV6-5","TRBV28","TRBV3-1","TRBV4-2","TRBV19"],
-    fail_nclones:[8,6,11,4,3,9,5,7,3],fail_domfrac:[0.45,0.62,0.28,0.71,0.38,0.18,0.55,0.32,0.67]
-  },
-  le: {
-    cells:4820,samples:6,clones:1108,
-    rho:0.89,rho_p:0.018,pearson_r:0.87,rho_clon:0.86,
-    segs:{TRBD:0.35,TRAV:0.50,TRAJ:0.54,TRBV:0.89,TRBJ:0.70,VJ_alpha:0.68,VJ_beta:0.78,VA_VB:0.83,Full_paired:0.89},
-    rows:[
-      {s:"P01",H_TRBV:2.41,H_clono:2.68,TRBV_clon:0.31,true_clon:0.28},
-      {s:"P02",H_TRBV:1.65,H_clono:1.85,TRBV_clon:0.57,true_clon:0.53},
-      {s:"P03",H_TRBV:2.78,H_clono:3.05,TRBV_clon:0.20,true_clon:0.17},
-      {s:"P04",H_TRBV:2.55,H_clono:2.79,TRBV_clon:0.27,true_clon:0.24},
-      {s:"P05",H_TRBV:1.48,H_clono:1.65,TRBV_clon:0.62,true_clon:0.59},
-      {s:"P06",H_TRBV:2.64,H_clono:2.90,TRBV_clon:0.24,true_clon:0.21}
-    ],
-    fail_genes:["TRBV12-3","TRBV5-1","TRBV20-1","TRBV28","TRBV6-5","TRBV7-2","TRBV3-1","TRBV19"],
-    fail_nclones:[9,5,7,3,4,6,3,2],fail_domfrac:[0.31,0.56,0.22,0.74,0.42,0.19,0.60,0.81]
-  },
-  lu: {
-    cells:6340,samples:7,clones:1674,
-    rho:0.75,rho_p:0.049,pearson_r:0.72,rho_clon:0.71,
-    segs:{TRBD:0.30,TRAV:0.48,TRAJ:0.51,TRBV:0.75,TRBJ:0.66,VJ_alpha:0.63,VJ_beta:0.74,VA_VB:0.80,Full_paired:0.87},
-    rows:[
-      {s:"UC01",H_TRBV:2.51,H_clono:2.76,TRBV_clon:0.29,true_clon:0.25},
-      {s:"UC02",H_TRBV:1.80,H_clono:2.01,TRBV_clon:0.49,true_clon:0.45},
-      {s:"CD01",H_TRBV:2.73,H_clono:3.02,TRBV_clon:0.21,true_clon:0.18},
-      {s:"CD02",H_TRBV:2.38,H_clono:2.62,TRBV_clon:0.33,true_clon:0.30},
-      {s:"HC01",H_TRBV:2.96,H_clono:3.28,TRBV_clon:0.14,true_clon:0.11},
-      {s:"HC02",H_TRBV:2.88,H_clono:3.15,TRBV_clon:0.17,true_clon:0.14},
-      {s:"HC03",H_TRBV:1.62,H_clono:1.45,TRBV_clon:0.59,true_clon:0.63}
-    ],
-    fail_genes:["TRBV20-1","TRBV5-1","TRBV12-3","TRBV6-5","TRBV28","TRBV7-2","TRBV4-2","TRBV19","TRBV3-1"],
-    fail_nclones:[12,7,9,5,4,8,3,2,6],fail_domfrac:[0.24,0.48,0.33,0.59,0.71,0.16,0.82,0.44,0.28]
-  },
-  bp: {
-    cells:8210,samples:9,clones:3120,
-    rho:0.82,rho_p:0.007,pearson_r:0.79,rho_clon:0.80,
-    segs:{TRBD:0.42,TRAV:0.61,TRAJ:0.63,TRBV:0.82,TRBJ:0.72,VJ_alpha:0.78,VJ_beta:0.83,VA_VB:0.89,Full_paired:0.94},
-    rows:[
-      {s:"D01",H_TRBV:2.88,H_clono:3.15,TRBV_clon:0.18,true_clon:0.15},
-      {s:"D02",H_TRBV:2.31,H_clono:2.59,TRBV_clon:0.35,true_clon:0.31},
-      {s:"D03",H_TRBV:3.05,H_clono:3.38,TRBV_clon:0.12,true_clon:0.09},
-      {s:"D04",H_TRBV:1.92,H_clono:2.18,TRBV_clon:0.46,true_clon:0.42},
-      {s:"D05",H_TRBV:2.74,H_clono:3.01,TRBV_clon:0.21,true_clon:0.18},
-      {s:"D06",H_TRBV:2.58,H_clono:2.84,TRBV_clon:0.25,true_clon:0.22},
-      {s:"D07",H_TRBV:1.68,H_clono:1.88,TRBV_clon:0.54,true_clon:0.50},
-      {s:"D08",H_TRBV:2.95,H_clono:3.22,TRBV_clon:0.14,true_clon:0.12},
-      {s:"D09",H_TRBV:2.45,H_clono:2.70,TRBV_clon:0.28,true_clon:0.26}
-    ],
-    fail_genes:["TRBV5-1","TRBV20-1","TRBV12-3","TRBV28","TRBV6-5","TRBV7-2","TRBV4-2","TRBV19"],
-    fail_nclones:[10,8,12,5,6,7,4,3],fail_domfrac:[0.35,0.28,0.19,0.58,0.43,0.22,0.72,0.61]
-  }
-};
+// ── Stacked bar (gene usage) ──────────────────────────────────────────────────
+const PALETTE = ["#1f78b4","#33a02c","#e31a1c","#ff7f00","#6a3d9a","#b15928","#a6cee3","#b2df8a","#fb9a99","#fdbf6f","#cab2d6","#ffff99","#8dd3c7","#bebada","#fb8072","grey70"];
 
-// ── Overview stats ────────────────────────────────────────────────────────────
-const ID_MAP = {bt:"bt",le:"le",lu:"lu",bp:"bp"};
-DS_KEYS.forEach((k,i) => {
-  const d = MOCK[k];
-  document.getElementById(k+"-cells").textContent   = d.cells.toLocaleString();
-  document.getElementById(k+"-samples").textContent = d.samples;
-  document.getElementById(k+"-clones").textContent  = d.clones.toLocaleString();
-  const re = document.getElementById(k+"-rho");
-  re.textContent = d.rho.toFixed(2);
-  re.style.color = d.rho>=.8?"#065f46":d.rho>=.6?"#92400e":"#991b1b";
-});
+function geneUsageBar(rows, elId, title, top_n=15) {
+  if (!rows || !rows.length) return;
+  // Aggregate total freq per gene across all samples
+  const totals = {};
+  rows.forEach(r => { totals[r.gene] = (totals[r.gene]||0) + num(r.freq); });
+  const topGenes = Object.entries(totals).sort((a,b)=>b[1]-a[1]).slice(0,top_n).map(e=>e[0]);
 
-// ── Correlation table ─────────────────────────────────────────────────────────
-const tbody = document.getElementById("corr-tbody");
-DS_KEYS.forEach((k,i) => {
-  const d = MOCK[k]; const sig = d.rho_p < 0.05;
-  const cls = d.rho>=.8?"rho-high":d.rho>=.6?"rho-med":"rho-low";
-  tbody.innerHTML += `<tr>
-    <td style="font-weight:600">${DS_NAMES[i]}</td>
-    <td><span class="rho-badge ${cls}">${d.rho.toFixed(3)}${sig?"*":""}</span></td>
-    <td style="color:var(--muted);font-size:12px">${d.rho_p.toFixed(4)}</td>
-    <td>${d.rho_clon.toFixed(3)}</td>
-    <td>${d.samples}</td>
-  </tr>`;
-});
+  const samples = [...new Set(rows.map(r=>r.sample_id))];
+  const traces = [...topGenes, "Other"].map((gene,i) => {
+    const freqs = samples.map(s => {
+      const r = rows.find(x=>x.sample_id===s && x.gene===gene);
+      if (gene==="Other") {
+        const top_sum = topGenes.reduce((acc,g)=>{
+          const rg=rows.find(x=>x.sample_id===s && x.gene===g);
+          return acc+(rg?num(rg.freq):0);
+        },0);
+        const total=rows.filter(x=>x.sample_id===s).reduce((acc,x)=>acc+num(x.freq),0);
+        return Math.max(0, total - top_sum);
+      }
+      return r ? num(r.freq) : 0;
+    });
+    return {
+      name: gene, x: samples, y: freqs, type:"bar",
+      marker:{color: gene==="Other"?"#cccccc":PALETTE[i%PALETTE.length]},
+      hovertemplate:`%{x}<br>${gene}: %{y:.1%}<extra></extra>`
+    };
+  });
+  Plotly.newPlot(elId, traces, {
+    barmode:"stack",
+    title:{text:title,font:{size:13}},
+    xaxis:{title:"Sample",tickangle:-40},
+    yaxis:{title:"Proportion of T cells",tickformat:".0%"},
+    legend:{orientation:"v",x:1.02,font:{size:9}},
+    margin:{t:50,b:90,r:150},
+    plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }, cfg);
+}
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Scatter ───────────────────────────────────────────────────────────────────
 function spearman(x,y){
   const rank=arr=>{const s=[...arr].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v);const r=new Array(arr.length);s.forEach((s,rank)=>r[s.i]=rank+1);return r};
   const rx=rank(x),ry=rank(y),n=x.length,d2=rx.map((r,i)=>(r-ry[i])**2).reduce((a,b)=>a+b,0);
   return 1-(6*d2)/(n*(n*n-1));
 }
-function heatColor(v){
-  if(v<.5){const t=v*2;return`rgb(${Math.round(77+t*(255-77))},${Math.round(175+t*(127-175))},${Math.round(74+t*(0-74))})`}
-  const t=(v-.5)*2;return`rgb(${Math.round(255+t*(228-255))},${Math.round(127+t*(26-127))},0)`;
-}
-function linFit(xs,ys){
-  const n=xs.length,xm=xs.reduce((a,b)=>a+b,0)/n,ym=ys.reduce((a,b)=>a+b,0)/n;
-  const slope=xs.map((x,i)=>(x-xm)*(ys[i]-ym)).reduce((a,b)=>a+b,0)/xs.map(x=>(x-xm)**2).reduce((a,b)=>a+b,0);
-  return{slope,int:ym-slope*xm};
+
+function scatterPlot(rows, elId, title, xcol="H_TRBV", ycol="H_clonotype", colorBy="dataset") {
+  const valid = rows.filter(r=>num(r[xcol])!==null && num(r[ycol])!==null);
+  if(!valid.length) return;
+
+  const dsNames = [...new Set(valid.map(r=>r.dataset))];
+  const traces = dsNames.map(ds => {
+    const pts = valid.filter(r=>r.dataset===ds);
+    return {
+      x:pts.map(r=>num(r[xcol])), y:pts.map(r=>num(r[ycol])),
+      mode:"markers+text", text:pts.map(r=>r.sample_id||r.dataset),
+      textposition:"top center", textfont:{size:8},
+      marker:{color:DS_COLORS[ds]||"grey",size:9,opacity:.8},
+      name:DS_LABELS[ds]||ds, type:"scatter"
+    };
+  });
+
+  const xs=valid.map(r=>num(r[xcol])), ys=valid.map(r=>num(r[ycol]));
+  const mn=Math.min(...xs,...ys)*.9, mx=Math.max(...xs,...ys)*1.05;
+  const rho = xs.length>=3 ? spearman(xs,ys) : null;
+
+  traces.unshift({x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"});
+
+  Plotly.newPlot(elId, traces, {
+    title:{text:`${title}${rho!==null?`<br><sub>Overall Spearman ρ = ${rho.toFixed(3)}</sub>`:""}`,font:{size:13}},
+    xaxis:{title:xcol.replace(/_/g," "),range:[mn,mx]},
+    yaxis:{title:ycol.replace(/_/g," "),range:[mn,mx]},
+    legend:{orientation:"h",y:-.15},
+    margin:{t:65,b:80}, plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }, cfg);
 }
 
-function scatterPlot(rows,color,title,xk="H_TRBV",yk="H_clono"){
-  const xs=rows.map(r=>r[xk]),ys=rows.map(r=>r[yk]);
-  const all=[...xs,...ys],mn=Math.min(...all)*.9,mx=Math.max(...all)*1.05;
-  const{slope,int}=linFit(xs,ys);
-  const rho=spearman(xs,ys);
-  return{data:[
-    {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"},
-    {x:[mn,mx],y:[mn,mx].map(x=>slope*x+int),mode:"lines",line:{color:"grey",width:1.5,dash:"dash"},name:"Linear fit",opacity:.6},
-    {x:xs,y:ys,mode:"markers+text",text:rows.map(r=>r.s),textposition:"top center",textfont:{size:9},marker:{color:color,size:10,opacity:.85},type:"scatter",name:"Sample"}
-  ],layout:{
-    title:{text:`${title}<br><sub>Spearman ρ = ${rho.toFixed(3)}</sub>`,font:{size:13}},
-    xaxis:{title:xk.includes("TRBV")?"H<sub>TRBV</sub> (proxy)":"TRBV clonality proxy",range:[mn,mx]},
-    yaxis:{title:yk.includes("clono")?"H<sub>clonotype</sub> (true)":"True clonality",range:[mn,mx]},
-    margin:{t:60,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  }};
+// ── Rank abundance ────────────────────────────────────────────────────────────
+function rankAbundancePlot(rows, elId, ds, title) {
+  const pts = rows.filter(r=>r.dataset===ds);
+  if(!pts.length) return;
+  const samples = [...new Set(pts.map(r=>r.sample_id))].slice(0,20); // cap at 20 for readability
+  const colorScale = samples.map((_,i)=>`hsl(${(i/samples.length)*300},70%,50%)`);
+  const traces = samples.map((s,i)=>{
+    const sr = pts.filter(r=>r.sample_id===s).sort((a,b)=>num(a.rank)-num(b.rank));
+    return {x:sr.map(r=>num(r.rank)),y:sr.map(r=>num(r.freq)),
+      mode:"lines",name:s,line:{color:colorScale[i],width:1.5},opacity:.8,
+      hovertemplate:`${s}<br>Rank %{x}<br>%{y:.2%}<extra></extra>`};
+  });
+  Plotly.newPlot(elId, traces, {
+    title:{text:title,font:{size:13}},
+    xaxis:{title:"Clonotype rank",type:"log"},
+    yaxis:{title:"Fraction of cells",type:"log",tickformat:".1%"},
+    legend:{orientation:"h",y:-.2,font:{size:9}},
+    margin:{t:50,b:80},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  }, cfg);
 }
 
-function blandAltman(rows,color,title){
-  const means=rows.map(r=>(r.H_TRBV+r.H_clono)/2),diffs=rows.map(r=>r.H_TRBV-r.H_clono);
+// ── Bland-Altman ──────────────────────────────────────────────────────────────
+function blandAltman(rows, elId, ds, title) {
+  const pts = rows.filter(r=>r.dataset===ds && num(r.H_TRBV)!==null && num(r.H_clonotype)!==null);
+  if(!pts.length) return;
+  const means=pts.map(r=>(num(r.H_TRBV)+num(r.H_clonotype))/2);
+  const diffs=pts.map(r=>num(r.H_TRBV)-num(r.H_clonotype));
   const md=diffs.reduce((a,b)=>a+b,0)/diffs.length;
-  const sd=Math.sqrt(diffs.map(d=>(d-md)**2).reduce((a,b)=>a+b,0)/(diffs.length-1));
-  const xr=[Math.min(...means)-.1,Math.max(...means)+.1];
-  return{data:[
-    {x:means,y:diffs,mode:"markers+text",text:rows.map(r=>r.s),textposition:"top center",textfont:{size:9},marker:{color,size:9,opacity:.85},type:"scatter",name:"Sample"},
-    {x:xr,y:[md,md],mode:"lines",line:{color:"royalblue",width:2},name:`Mean (${md.toFixed(3)})`},
+  const sd=Math.sqrt(diffs.map(d=>(d-md)**2).reduce((a,b)=>a+b,0)/(Math.max(diffs.length-1,1)));
+  const xr=[Math.min(...means)-.05,Math.max(...means)+.05];
+  Plotly.newPlot(elId,[
+    {x:means,y:diffs,mode:"markers+text",text:pts.map(r=>r.sample_id),
+     textposition:"top center",textfont:{size:8},
+     marker:{color:DS_COLORS[ds],size:9,opacity:.85},type:"scatter",name:"Sample"},
+    {x:xr,y:[md,md],mode:"lines",line:{color:"royalblue",width:2},name:`Mean bias (${md.toFixed(3)})`},
     {x:xr,y:[md+1.96*sd,md+1.96*sd],mode:"lines",line:{color:"red",width:1.5,dash:"dash"},name:"+1.96 SD"},
     {x:xr,y:[md-1.96*sd,md-1.96*sd],mode:"lines",line:{color:"red",width:1.5,dash:"dash"},name:"-1.96 SD"},
     {x:xr,y:[0,0],mode:"lines",line:{color:"grey",width:1,dash:"dot"},showlegend:false}
-  ],layout:{
+  ],{
     title:{text:title,font:{size:13}},
     xaxis:{title:"Mean of H_TRBV and H_clonotype"},
     yaxis:{title:"H_TRBV − H_clonotype"},
     legend:{orientation:"h",y:-.2},margin:{t:50,b:80},
     plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  }};
+  },cfg);
 }
 
-const TRBV_GENES_TOP=["TRBV5-1","TRBV12-3","TRBV20-1","TRBV7-2","TRBV6-5","TRBV28","TRBV3-1","TRBV19","TRBV4-2","Other"];
-const TRAV_GENES_TOP=["TRAV12-2","TRAV1-2","TRAV26-1","TRAV5","TRAV20","TRAV41","TRAV9-2","TRAV38-2DV8","TRAV13-1","Other"];
-const TRAJ_GENES_TOP=["TRAJ33","TRAJ20","TRAJ49","TRAJ6","TRAJ52","TRAJ31","TRAJ45","TRAJ17","TRAJ23","Other"];
-const PALETTE=["#1f78b4","#33a02c","#e31a1c","#ff7f00","#6a3d9a","#b15928","#a6cee3","#b2df8a","#fb9a99","#fdbf6f","grey"];
+// ── Load all CSVs and render ──────────────────────────────────────────────────
+const FILES = ["coverage","trbv_usage","trav_usage","traj_usage",
+               "diversity_whole","correlation_whole","diversity_subset",
+               "correlation_subset","trbv_usage_subset","segment_correlations",
+               "pseudo_summary","rank_abundance"];
 
-function geneBar(genes,samples,title,color_class){
-  const traces=genes.map((g,i)=>({
-    x:samples,y:samples.map(()=>Math.random()*.12+.03+(g==="Other"?.02:0)),
-    name:g,type:"bar",marker:{color:PALETTE[i%PALETTE.length]},
-    hovertemplate:`%{x}<br>${g}: %{y:.1%}<extra></extra>`
-  }));
-  return{data:traces,layout:{
-    barmode:"stack",title:{text:title,font:{size:13}},
-    xaxis:{title:"Sample",tickangle:-35},yaxis:{title:"Proportion of T cells",tickformat:".0%"},
-    legend:{orientation:"v",x:1.02,font:{size:10}},margin:{t:50,b:80,r:140},
-    plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  }};
-}
+Promise.all(FILES.map(f => fetch(`data/${f}.csv`).then(r=>{
+  if(!r.ok) throw new Error(`HTTP ${r.status} for ${f}.csv`);
+  return r.text().then(t=>({key:f, rows:parseCSV(t)}));
+}))).then(results => {
+  const D = {};
+  results.forEach(r => D[r.key] = r.rows);
 
-function failurePlot(d,title){
-  return{data:[{
-    y:d.fail_genes,x:d.fail_nclones,type:"bar",orientation:"h",
-    marker:{color:d.fail_domfrac.map(heatColor)},
-    text:d.fail_domfrac.map(f=>`Dom: ${(f*100).toFixed(0)}%`),textposition:"outside",
-    hovertemplate:"%{y}<br>Clonotypes: %{x}<br>%{text}<extra></extra>"
-  }],layout:{
-    title:{text:title,font:{size:13}},
-    xaxis:{title:"Unique clonotypes within TRBV gene"},yaxis:{autorange:"reversed"},
-    margin:{t:60,b:60,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  }};
-}
-
-function segBar(segs,title,color){
-  const labels=Object.keys(segs),rhos=Object.values(segs);
-  return{data:[{
-    x:rhos,y:labels,type:"bar",orientation:"h",
-    marker:{color:labels.map(l=>SEGMENTS.find(s=>s.label===l)?.color||color)},
-    text:rhos.map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
-    hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
-  }],layout:{
-    title:{text:title,font:{size:13}},
-    xaxis:{title:"Spearman ρ with H_clonotype",range:[0,1.1]},yaxis:{},
-    margin:{t:50,b:50,l:100},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  }};
-}
-
-// ── Render all plots ──────────────────────────────────────────────────────────
-const cfg={responsive:true};
-
-DS_KEYS.forEach((k,i) => {
-  const d=MOCK[k], col=Object.values(DS_COLORS)[i], name=DS_NAMES[i], samps=d.rows.map(r=>r.s);
-
-  // TRBV stacked bar
-  Plotly.newPlot(`plot-trbv-${k}`, geneBar(TRBV_GENES_TOP,samps,`TRBV Usage — ${name}`).data,
-    geneBar(TRBV_GENES_TOP,samps,`TRBV Usage — ${name}`).layout, cfg);
-
-  // TRAV bar
-  Plotly.newPlot(`plot-trav-${k}`, geneBar(TRAV_GENES_TOP,samps,`TRAV Usage — ${name}`).data,
-    geneBar(TRAV_GENES_TOP,samps,`TRAV Usage — ${name}`).layout, cfg);
-
-  // TRAJ bar
-  Plotly.newPlot(`plot-traj-${k}`, geneBar(TRAJ_GENES_TOP,samps,`TRAJ Usage — ${name}`).data,
-    geneBar(TRAJ_GENES_TOP,samps,`TRAJ Usage — ${name}`).layout, cfg);
-
-  // Segment correlation bars (per dataset)
-  const sb=segBar(d.segs,`TCR Segment Correlations — ${name}`,col);
-  Plotly.newPlot(`plot-seg-${k}`,sb.data,sb.layout,cfg);
-
-  // Scatter
-  const sc=scatterPlot(d.rows,col,`H<sub>TRBV</sub> vs H<sub>clonotype</sub> — ${name}`);
-  Plotly.newPlot(`plot-sc-${k}`,sc.data,sc.layout,cfg);
-
-  // Clonality scatter
-  const cn=scatterPlot(d.rows,col,`Clonality proxy vs true — ${name}`,"TRBV_clon","true_clon");
-  Plotly.newPlot(`plot-cn-${k}`,cn.data,cn.layout,cfg);
-
-  // Bland-Altman
-  const ba=blandAltman(d.rows,col,`Bland-Altman — ${name}`);
-  Plotly.newPlot(`plot-ba-${k}`,ba.data,ba.layout,cfg);
-
-  // Failure mode
-  const fa=failurePlot(d,`Within-TRBV Clonotype Diversity — ${name}`);
-  Plotly.newPlot(`plot-fa-${k}`,fa.data,fa.layout,cfg);
-});
-
-// ── All-datasets segment correlation (mean ρ) ─────────────────────────────────
-(function(){
-  const segLabels=SEGMENTS.map(s=>s.label);
-  const meanRhos=segLabels.map(l=>{
-    const rhos=DS_KEYS.map(k=>MOCK[k].segs[l]||0);
-    return rhos.reduce((a,b)=>a+b,0)/rhos.length;
+  // ── 1. Overview cards ─────────────────────────────────────────────────────
+  const idMap = {lechner:["le","le","le","le"], luoma:["lu","lu","lu","lu"], blum_pbmc:["bp","bp","bp","bp"], blum_tissue:["bt","bt","bt","bt"]};
+  D.coverage.forEach(r => {
+    const k = {lechner:"le",luoma:"lu",blum_pbmc:"bp",blum_tissue:"bt"}[r.dataset];
+    if(!k) return;
+    const set = (id,v) => { const el=document.getElementById(`${k}-${id}`); if(el) el.textContent=v; };
+    set("cells", parseInt(r.n_cells).toLocaleString());
+    set("samples", r.n_samples);
+    set("clones", parseInt(r.n_unique_clonotypes||0).toLocaleString());
+    // Rho from correlation_whole
+    const corRow = D.correlation_whole.find(c=>c.dataset===r.dataset);
+    const rhoEl = document.getElementById(`${k}-rho`);
+    if(rhoEl && corRow && corRow.spearman_rho!=="NA") {
+      rhoEl.textContent = parseFloat(corRow.spearman_rho).toFixed(2);
+      const rho = parseFloat(corRow.spearman_rho);
+      rhoEl.style.color = rho>=.8?"#065f46":rho>=.6?"#92400e":"#991b1b";
+    } else if(rhoEl) rhoEl.textContent = "—";
   });
-  Plotly.newPlot("plot-seg-all",[{
-    x:meanRhos,y:segLabels,type:"bar",orientation:"h",
-    marker:{color:SEGMENTS.map(s=>s.color)},
-    text:meanRhos.map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
-    hovertemplate:"%{y}: mean ρ = %{x:.3f}<extra></extra>"
-  }],{
-    title:{text:"Mean Spearman ρ with H<sub>clonotype</sub> — All Datasets",font:{size:13}},
-    xaxis:{title:"Mean Spearman ρ",range:[0,1.1]},yaxis:{},
-    margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
 
-// ── All-datasets scatter ──────────────────────────────────────────────────────
-(function(){
-  const traces=DS_KEYS.map((k,i)=>({
-    x:MOCK[k].rows.map(r=>r.H_TRBV),y:MOCK[k].rows.map(r=>r.H_clono),
-    mode:"markers+text",text:MOCK[k].rows.map(r=>r.s),
-    textposition:"top center",textfont:{size:9},
-    marker:{color:Object.values(DS_COLORS)[i],size:10,opacity:.85},
-    name:DS_NAMES[i],type:"scatter"
-  }));
-  const allX=traces.flatMap(t=>t.x),allY=traces.flatMap(t=>t.y);
-  const mn=Math.min(...allX,...allY)*.9,mx=Math.max(...allX,...allY)*1.05;
-  traces.unshift({x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"});
-  const rho=spearman(allX,allY);
-  Plotly.newPlot("plot-sc-all",traces,{
-    title:{text:`TRBV Proxy vs True Diversity — All Datasets<br><sub>Overall Spearman ρ = ${rho.toFixed(3)}</sub>`,font:{size:13}},
-    xaxis:{title:"H<sub>TRBV</sub> (proxy)",range:[mn,mx]},
-    yaxis:{title:"H<sub>clonotype</sub> (true)",range:[mn,mx]},
-    legend:{orientation:"h",y:-.15},margin:{t:70,b:80},
-    plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
-
-// ── All-datasets clonality scatter ────────────────────────────────────────────
-(function(){
-  const traces=DS_KEYS.map((k,i)=>({
-    x:MOCK[k].rows.map(r=>r.TRBV_clon),y:MOCK[k].rows.map(r=>r.true_clon),
-    mode:"markers+text",text:MOCK[k].rows.map(r=>r.s),
-    textposition:"top center",textfont:{size:9},
-    marker:{color:Object.values(DS_COLORS)[i],size:10,opacity:.85},
-    name:DS_NAMES[i],type:"scatter"
-  }));
-  traces.unshift({x:[0,1],y:[0,1],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false});
-  Plotly.newPlot("plot-cn-all",traces,{
-    title:{text:"Clonality Proxy vs True Clonality — All Datasets",font:{size:13}},
-    xaxis:{title:"TRBV clonality proxy",range:[0,1]},
-    yaxis:{title:"True clonality",range:[0,1]},
-    legend:{orientation:"h",y:-.15},margin:{t:60,b:80},
-    plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
-
-// ── Cross-dataset rho bar ─────────────────────────────────────────────────────
-(function(){
-  const rhos=DS_KEYS.map(k=>MOCK[k].rho);
-  const sig=DS_KEYS.map(k=>MOCK[k].rho_p<.05);
-  Plotly.newPlot("plot-rho-bar",[{
-    x:rhos,y:DS_NAMES,type:"bar",orientation:"h",
-    marker:{color:Object.values(DS_COLORS)},
-    text:rhos.map((r,i)=>`ρ = ${r.toFixed(2)}${sig[i]?"*":""}`),textposition:"outside",
-    hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
-  }],{
-    title:{text:"H<sub>TRBV</sub> vs H<sub>clonotype</sub> — Spearman ρ<br><sub>* p &lt; 0.05</sub>",font:{size:13}},
-    xaxis:{title:"Spearman ρ",range:[0,1.15]},yaxis:{},
-    margin:{t:60,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
-
-// ── CD4/CD8/DP/DN subset stratification ──────────────────────────────────────
-
-const SUBSET_COLORS_JS = {CD8:"#D6604D",CD4:"#2166AC",Treg:"#4DAF4A",DP:"#FF7F00",DN:"#9B59B6"};
-
-// Mock per-subset scatter data (each dataset × subset)
-const SUBSET_MOCK = {
-  bt:[
-    {s:"S01",subset:"CD8",H_TRBV:2.61,H_clono:2.90},{s:"S02",subset:"CD8",H_TRBV:2.31,H_clono:2.62},
-    {s:"S03",subset:"CD8",H_TRBV:2.80,H_clono:3.12},{s:"S04",subset:"CD8",H_TRBV:1.78,H_clono:2.05},
-    {s:"S01",subset:"CD4",H_TRBV:2.95,H_clono:3.21},{s:"S02",subset:"CD4",H_TRBV:2.68,H_clono:2.91},
-    {s:"S03",subset:"CD4",H_TRBV:3.05,H_clono:3.34},{s:"S04",subset:"CD4",H_TRBV:2.11,H_clono:2.38},
-    {s:"S01",subset:"DP", H_TRBV:2.40,H_clono:2.50},{s:"S02",subset:"DP", H_TRBV:2.10,H_clono:2.25},
-    {s:"S01",subset:"DN", H_TRBV:1.95,H_clono:1.80},{s:"S02",subset:"DN", H_TRBV:2.20,H_clono:2.10}
-  ],
-  le:[
-    {s:"P01",subset:"CD8",H_TRBV:2.21,H_clono:2.48},{s:"P02",subset:"CD8",H_TRBV:1.45,H_clono:1.62},
-    {s:"P03",subset:"CD8",H_TRBV:2.58,H_clono:2.85},{s:"P01",subset:"CD4",H_TRBV:2.65,H_clono:2.92},
-    {s:"P02",subset:"CD4",H_TRBV:1.80,H_clono:2.01},{s:"P03",subset:"CD4",H_TRBV:2.88,H_clono:3.10}
-  ],
-  lu:[
-    {s:"UC01",subset:"CD8",H_TRBV:2.31,H_clono:2.55},{s:"CD01",subset:"CD8",H_TRBV:2.53,H_clono:2.82},
-    {s:"HC01",subset:"CD8",H_TRBV:2.76,H_clono:3.05},{s:"UC01",subset:"CD4",H_TRBV:2.65,H_clono:2.88},
-    {s:"CD01",subset:"CD4",H_TRBV:2.19,H_clono:2.41},{s:"HC01",subset:"CD4",H_TRBV:3.10,H_clono:3.35}
-  ],
-  bp:[
-    {s:"D01",subset:"CD8",H_TRBV:2.68,H_clono:2.94},{s:"D02",subset:"CD8",H_TRBV:2.11,H_clono:2.37},
-    {s:"D03",subset:"CD8",H_TRBV:2.85,H_clono:3.15},{s:"D04",subset:"CD8",H_TRBV:1.72,H_clono:1.98},
-    {s:"D01",subset:"CD4",H_TRBV:2.98,H_clono:3.22},{s:"D02",subset:"CD4",H_TRBV:2.42,H_clono:2.65},
-    {s:"D01",subset:"DP", H_TRBV:2.55,H_clono:2.62},{s:"D02",subset:"DP", H_TRBV:2.25,H_clono:2.31},
-    {s:"D01",subset:"DN", H_TRBV:2.05,H_clono:1.92}
-  ]
-};
-
-function subsetScatterAll(){
-  const subsets=["CD8","CD4","DP","DN","Treg"];
-  const traces=[];
-  DS_KEYS.forEach((k,i)=>{
-    const d=SUBSET_MOCK[k]||[];
-    subsets.forEach(ss=>{
-      const pts=d.filter(r=>r.subset===ss);
-      if(!pts.length) return;
-      traces.push({
-        x:pts.map(r=>r.H_TRBV), y:pts.map(r=>r.H_clono),
-        mode:"markers+text", text:pts.map(r=>r.s+"<br>("+r.subset+")"),
-        textposition:"top center", textfont:{size:8},
-        marker:{color:SUBSET_COLORS_JS[ss]||"grey",size:9,opacity:.8,
-                symbol:["circle","square","diamond","cross","triangle-up"][i]||"circle"},
-        name:DS_NAMES[i]+" "+ss, legendgroup:ss, showlegend:true, type:"scatter"
-      });
-    });
+  // ── 2. TRBV usage stacked bars ────────────────────────────────────────────
+  [["lechner","bt"],["luoma","lu"],["blum_pbmc","bp"]].forEach(([ds,k]) => {
+    const rows = D.trbv_usage.filter(r=>r.dataset===ds);
+    geneUsageBar(rows, `plot-trbv-${k}`, `TRBV Gene Usage — ${DS_LABELS[ds]}`, 15);
   });
-  const allX=traces.flatMap(t=>t.x), allY=traces.flatMap(t=>t.y);
-  const mn=Math.min(...allX,...allY)*.9, mx=Math.max(...allX,...allY)*1.05;
-  traces.unshift({x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},
-    showlegend:false,hoverinfo:"none"});
-  Plotly.newPlot("plot-sub-all", traces, {
-    title:{text:"H<sub>TRBV</sub> vs H<sub>clonotype</sub> — CD4 / CD8 / DP / DN (All Datasets)",font:{size:13}},
-    xaxis:{title:"H<sub>TRBV</sub> (proxy)",range:[mn,mx]},
-    yaxis:{title:"H<sub>clonotype</sub> (true)",range:[mn,mx]},
-    legend:{orientation:"v",groupclick:"toggleitem"},
-    margin:{t:60,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-}
-subsetScatterAll();
 
-// Per-dataset subset plots
-DS_KEYS.forEach((k,i)=>{
-  ["cd8","cd4"].forEach(ss=>{
-    const pts=(SUBSET_MOCK[k]||[]).filter(r=>r.subset===ss.toUpperCase());
-    const el=document.getElementById(`plot-sub-${k}-${ss}`);
-    if(!el) return;
-    if(!pts.length){
-      Plotly.newPlot(el,[],{title:{text:`No ${ss.toUpperCase()} data — ${DS_NAMES[i]}`,font:{size:12}},
-        plot_bgcolor:"#fafafa",paper_bgcolor:"white"},cfg);
-      return;
-    }
-    const xs=pts.map(r=>r.H_TRBV), ys=pts.map(r=>r.H_clono);
-    const mn=Math.min(...xs,...ys)*.9, mx=Math.max(...xs,...ys)*1.05;
-    Plotly.newPlot(el,[
-      {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false},
-      {x:xs,y:ys,mode:"markers+text",text:pts.map(r=>r.s),
-       textposition:"top center",textfont:{size:9},
-       marker:{color:SUBSET_COLORS_JS[ss.toUpperCase()],size:10,opacity:.85},
-       type:"scatter",name:ss.toUpperCase()}
-    ],{
-      title:{text:`${ss.toUpperCase()} — H<sub>TRBV</sub> vs H<sub>clonotype</sub> — ${DS_NAMES[i]}`,font:{size:12}},
-      xaxis:{title:"H<sub>TRBV</sub>",range:[mn,mx]},
-      yaxis:{title:"H<sub>clonotype</sub>",range:[mn,mx]},
-      margin:{t:50,b:50},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+  // ── 3. TRAV + TRAJ bars ───────────────────────────────────────────────────
+  [["lechner","le"],["luoma","lu"],["blum_pbmc","bp"]].forEach(([ds,k]) => {
+    const trav = D.trav_usage.filter(r=>r.dataset===ds);
+    const traj = D.traj_usage.filter(r=>r.dataset===ds);
+    if(trav.length) geneUsageBar(trav, `plot-trav-${k}`, `TRAV Gene Usage — ${DS_LABELS[ds]}`, 15);
+    if(traj.length) geneUsageBar(traj, `plot-traj-${k}`, `TRAJ Gene Usage — ${DS_LABELS[ds]}`, 15);
+  });
+
+  // ── 4. All-segment correlation bars ──────────────────────────────────────
+  // Mean rho across datasets per segment
+  const segByMetric = {};
+  D.segment_correlations.forEach(r => {
+    if(!segByMetric[r.metric]) segByMetric[r.metric]=[];
+    if(r.spearman_rho!=="NA") segByMetric[r.metric].push(num(r.spearman_rho));
+  });
+  const segOrder = ["TRBV","TRBJ","TRBD","TRAV","TRAJ","VJ_beta","VJ_alpha","VA_VB","Full_paired"];
+  const meanRhos = segOrder.map(m=>{
+    const vals=(segByMetric[m]||[]).filter(v=>v!==null);
+    return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+  }).filter(v=>v!==null);
+  const validSegs = segOrder.filter((_,i)=>meanRhos[i]!==undefined);
+
+  if(document.getElementById("plot-seg-all")) {
+    Plotly.newPlot("plot-seg-all",[{
+      x:meanRhos,y:validSegs,type:"bar",orientation:"h",
+      marker:{color:validSegs.map(s=>SEG_COLORS[s]||"grey")},
+      text:meanRhos.map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
+      hovertemplate:"%{y}: mean ρ = %{x:.3f}<extra></extra>"
+    }],{
+      title:{text:"Mean Spearman ρ with H<sub>clonotype</sub> — All Datasets",font:{size:13}},
+      xaxis:{title:"Mean Spearman ρ",range:[0,1.1]},yaxis:{autorange:"reversed"},
+      margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
     },cfg);
-  });
-});
-
-// Subset rho bar
-(function(){
-  const subsetsShow=["CD8","CD4","DP","DN"];
-  // Mock: CD8 typically higher rho than CD4 (more oligoclonal)
-  const rhos={CD8:0.88, CD4:0.72, DP:0.65, DN:0.58};
-  Plotly.newPlot("plot-sub-rho",[{
-    x:Object.values(rhos), y:Object.keys(rhos),
-    type:"bar",orientation:"h",
-    marker:{color:Object.keys(rhos).map(s=>SUBSET_COLORS_JS[s])},
-    text:Object.values(rhos).map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
-    hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
-  }],{
-    title:{text:"Mean Spearman ρ (H<sub>TRBV</sub> vs H<sub>clonotype</sub>) by T Cell Subset",font:{size:13}},
-    xaxis:{title:"Mean Spearman ρ",range:[0,1.1]},yaxis:{},
-    margin:{t:50,b:50,l:70},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
-
-
-// ── Pseudoclonotype plots ─────────────────────────────────────────────────────
-
-const PSEUDO_LEVELS_JS=["TRBV","TRBJ","VJ_beta","TRAV","VJ_alpha","VA_VB","Full_paired"];
-const PSEUDO_COLORS={
-  TRBV:"#3b82f6",TRBJ:"#22c55e",VJ_beta:"#2563eb",
-  TRAV:"#ec4899",VJ_alpha:"#db2777",VA_VB:"#7c3aed",Full_paired:"#059669"
-};
-// Mock summary stats per level (replace with real CSV)
-const PSEUDO_SUMMARY=[
-  {label:"TRBV",      purity:.52, collision:.81, split:.03, coverage:.89, rho:.65},
-  {label:"TRBJ",      purity:.58, collision:.76, split:.04, coverage:.91, rho:.70},
-  {label:"VJ_beta",   purity:.71, collision:.58, split:.06, coverage:.87, rho:.80},
-  {label:"TRAV",      purity:.61, collision:.68, split:.04, coverage:.72, rho:.55},
-  {label:"VJ_alpha",  purity:.73, collision:.55, split:.05, coverage:.69, rho:.74},
-  {label:"VA_VB",     purity:.79, collision:.42, split:.08, coverage:.64, rho:.85},
-  {label:"Full_paired",purity:.88,collision:.21, split:.11, coverage:.61, rho:.91}
-];
-
-// Populate table
-(function(){
-  const tbody=document.getElementById("pseudo-tbody");
-  const resDescs={TRBV:"V-beta only",TRBJ:"J-beta only",VJ_beta:"Vβ:Jβ combo",
-    TRAV:"V-alpha only",VJ_alpha:"Vα:Jα combo",VA_VB:"Vα:Vβ paired",
-    Full_paired:"Vα:Jα:Vβ:Jβ (full)"};
-  PSEUDO_SUMMARY.forEach(d=>{
-    const purityCls=d.purity>=.8?"rho-high":d.purity>=.6?"rho-med":"rho-low";
-    tbody.innerHTML+=`<tr>
-      <td><strong>${d.label}</strong></td>
-      <td style="color:var(--muted);font-size:12px">${resDescs[d.label]}</td>
-      <td><span class="rho-badge ${purityCls}">${(d.purity*100).toFixed(0)}%</span></td>
-      <td>${(d.collision*100).toFixed(0)}%</td>
-      <td>${(d.split*100).toFixed(0)}%</td>
-      <td>${(d.coverage*100).toFixed(0)}%</td>
-      <td>${d.rho.toFixed(2)}</td>
-    </tr>`;
-  });
-})();
-
-// Summary 3-panel (purity / collision / split)
-(function(){
-  const lvls=PSEUDO_SUMMARY.map(d=>d.label);
-  const cols=lvls.map(l=>PSEUDO_COLORS[l]);
-
-  function panel(metric,title,color_arr){
-    return {x:PSEUDO_SUMMARY.map(d=>d[metric]),y:lvls,type:"bar",orientation:"h",
-      marker:{color:color_arr||cols},name:title,
-      text:PSEUDO_SUMMARY.map(d=>`${(d[metric]*100).toFixed(0)}%`),textposition:"outside",
-      hovertemplate:`%{y}: ${title} %{x:.2%}<extra></extra>`};
   }
 
-  Plotly.newPlot("plot-ps-summary",[panel("purity","Purity",cols)],{
-    title:{text:"Pseudoclonotype Purity by Combo Level — Mean across Datasets",font:{size:13}},
-    xaxis:{title:"Weighted purity",range:[0,1.1],tickformat:".0%"},yaxis:{autorange:"reversed"},
-    margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-
-  // Collision & split together
-  Plotly.newPlot("plot-ps-purity",[
-    panel("collision","Collision rate",lvls.map(()=>"#f87171")),
-    panel("split","Split rate",lvls.map(()=>"#fb923c"))
-  ],{
-    title:{text:"Collision Rate & Split Rate by Combo Level",font:{size:13}},
-    barmode:"group",
-    xaxis:{title:"Rate",range:[0,.95],tickformat:".0%"},yaxis:{autorange:"reversed"},
-    legend:{orientation:"h",y:-.15},
-    margin:{t:50,b:80,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-
-  // H scatter (rho per level)
-  const mockPts=PSEUDO_SUMMARY.map(d=>({label:d.label,rho:d.rho,
-    xs:Array.from({length:8},()=>1.5+Math.random()*1.5),
-    ys:Array.from({length:8},(_,i)=>1.5+Math.random()*1.5*(0.5+0.5*d.rho))}));
-  const scTraces=mockPts.map(d=>({
-    x:d.xs,y:d.ys,mode:"markers",name:d.label,
-    marker:{color:PSEUDO_COLORS[d.label],size:8,opacity:.75},
-    hovertemplate:`${d.label}<br>H_pseudo=%{x:.2f}<br>H_real=%{y:.2f}<extra></extra>`
-  }));
-  Plotly.newPlot("plot-ps-scatter",scTraces,{
-    title:{text:"H(pseudoclonotype) vs H(real clonotype) — by Combo Level",font:{size:13}},
-    xaxis:{title:"H(pseudoclonotype)"},yaxis:{title:"H(real CDR3 clonotype)"},
-    legend:{orientation:"h",y:-.15},
-    margin:{t:50,b:80},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-
-  // Purity heatmap: level × subset
-  const subsetsH=["CD8","CD4","DP","DN"];
-  // Mock purity values: CD8 best, DP lowest
-  const purMatrix=PSEUDO_SUMMARY.map(d=>[
-    d.purity+.02, d.purity-.04, d.purity-.10, d.purity-.15
-  ].map(v=>Math.max(0,Math.min(1,v))));
-  Plotly.newPlot("plot-ps-heatmap",[{
-    z:purMatrix, x:subsetsH, y:PSEUDO_SUMMARY.map(d=>d.label),
-    type:"heatmap",
-    colorscale:[[0,"#fee2e2"],[.5,"#fef3c7"],[1,"#d1fae5"]],
-    text:purMatrix.map(row=>row.map(v=>`${(v*100).toFixed(0)}%`)),
-    texttemplate:"%{text}",
-    hovertemplate:"Level: %{y}<br>Subset: %{x}<br>Purity: %{text}<extra></extra>",
-    colorbar:{title:"Purity",tickformat:".0%"}
-  }],{
-    title:{text:"Mean Pseudoclonotype Purity — Combo Level × Subset",font:{size:13}},
-    xaxis:{title:"T cell subset"},yaxis:{title:"Gene-combo level",autorange:"reversed"},
-    margin:{t:50,b:60,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
-
-
-// ── RNA-seq vs TCR-seq plots ──────────────────────────────────────────────────
-
-// Mock: H from RNA-seq vs H from TCR-seq per sample (both chains)
-const RNA_MOCK_TRBV=[
-  {ds:"blum_tissue",s:"S01",H_tcr:2.81,H_rna:2.65,subset:"CD8"},
-  {ds:"blum_tissue",s:"S02",H_tcr:2.54,H_rna:2.41,subset:"CD4"},
-  {ds:"blum_tissue",s:"S03",H_tcr:2.92,H_rna:2.78,subset:"CD8"},
-  {ds:"blum_tissue",s:"S04",H_tcr:1.98,H_rna:1.82,subset:"CD8"},
-  {ds:"lechner",     s:"P01",H_tcr:2.41,H_rna:2.28,subset:"CD8"},
-  {ds:"lechner",     s:"P02",H_tcr:1.65,H_rna:1.54,subset:"CD8"},
-  {ds:"luoma",       s:"UC01",H_tcr:2.51,H_rna:2.35,subset:"CD8"},
-  {ds:"luoma",       s:"CD01",H_tcr:2.73,H_rna:2.61,subset:"CD4"},
-  {ds:"blum_pbmc",   s:"D01",H_tcr:2.88,H_rna:2.72,subset:"CD4"},
-  {ds:"blum_pbmc",   s:"D02",H_tcr:2.31,H_rna:2.19,subset:"CD8"}
-];
-const RNA_MOCK_TRAV=RNA_MOCK_TRBV.map(d=>({...d,H_tcr:d.H_tcr*.85,H_rna:d.H_rna*.78}));
-
-function rnascatterPlot(data,chainLabel,elId){
-  const rho=spearman(data.map(d=>d.H_tcr),data.map(d=>d.H_rna));
-  const all=[...data.map(d=>d.H_tcr),...data.map(d=>d.H_rna)];
-  const mn=Math.min(...all)*.9, mx=Math.max(...all)*1.05;
-  Plotly.newPlot(elId,[
-    {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false},
-    {x:data.map(d=>d.H_tcr),y:data.map(d=>d.H_rna),
-     mode:"markers+text",text:data.map(d=>d.s),
-     textposition:"top center",textfont:{size:8},
-     marker:{color:data.map(d=>DS_COLORS[d.ds]||"grey"),size:9,opacity:.85},
-     type:"scatter",name:"Sample"}
-  ],{
-    title:{text:`H<sub>${chainLabel}</sub>: RNA-seq vs TCR-seq<br><sub>Spearman ρ = ${rho.toFixed(3)}</sub>`,font:{size:13}},
-    xaxis:{title:`H<sub>${chainLabel}</sub> from TCR-seq`,range:[mn,mx]},
-    yaxis:{title:`H<sub>${chainLabel}</sub> from RNA-seq`,range:[mn,mx]},
-    margin:{t:60,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-}
-rnascatterPlot(RNA_MOCK_TRBV,"TRBV","plot-rna-htrbv");
-rnascatterPlot(RNA_MOCK_TRAV,"TRAV","plot-rna-htrav");
-
-// Per-gene concordance bars (TRBV)
-(function(){
-  const genes=GENES.TRBV.slice(0,18);
-  const conc=genes.map(()=>Math.random()*.4+.45);
-  Plotly.newPlot("plot-rna-conc-trbv",[{
-    y:genes, x:conc, type:"bar", orientation:"h",
-    marker:{color:conc.map(v=>v>=.7?"#d1fae5":v>=.5?"#fef3c7":"#fee2e2")},
-    text:conc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside",
-    hovertemplate:"%{y}: %{text}<extra></extra>"
-  }],{
-    title:{text:"TRBV Per-Gene Concordance: RNA-seq vs TCR-seq",font:{size:13}},
-    xaxis:{title:"Concordance rate",range:[0,1.1],tickformat:".0%"},
-    yaxis:{autorange:"reversed"},
-    margin:{t:50,b:50,l:100},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-
-  const travGenes=GENES.TRAV.slice(0,18);
-  const travConc=travGenes.map(()=>Math.random()*.35+.40);
-  Plotly.newPlot("plot-rna-conc-trav",[{
-    y:travGenes, x:travConc, type:"bar", orientation:"h",
-    marker:{color:travConc.map(v=>v>=.7?"#d1fae5":v>=.5?"#fef3c7":"#fee2e2")},
-    text:travConc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside",
-    hovertemplate:"%{y}: %{text}<extra></extra>"
-  }],{
-    title:{text:"TRAV Per-Gene Concordance: RNA-seq vs TCR-seq",font:{size:13}},
-    xaxis:{title:"Concordance rate",range:[0,1.1],tickformat:".0%"},
-    yaxis:{autorange:"reversed"},
-    margin:{t:50,b:50,l:110},plot_bgcolor:"#fafaja",paper_bgcolor:"white"
-  },cfg);
-})();
-
-// Expression heatmap (mock: genes × sample×subset)
-(function(){
-  const genesMock=GENES.TRBV.slice(0,12).concat(GENES.TRAV.slice(0,8));
-  const cols=["S01 CD8","S02 CD8","S03 CD4","S04 CD4","S01 DP","S02 DN"];
-  const z=genesMock.map(g=>cols.map(()=>Math.random()*2.5));
-  Plotly.newPlot("plot-rna-heatmap",[{
-    z, x:cols, y:genesMock, type:"heatmap",
-    colorscale:[[0,"white"],[.4,"#FEF3C7"],[.7,"#F59E0B"],[1,"#DC2626"]],
-    colorbar:{title:"Mean log-norm expr."}
-  }],{
-    title:{text:"TCR Gene Expression Heatmap (mock — run R script for real values)",font:{size:13}},
-    xaxis:{title:"Sample × Subset"},yaxis:{title:"TCR gene",autorange:"reversed"},
-    margin:{t:60,b:80,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
-
-// Concordance summary bar across datasets
-(function(){
-  const dsNames=DS_NAMES;
-  const trbvConc=[0.68,0.71,0.65,0.73];  // mock
-  const travConc=[0.55,0.58,0.52,0.61];   // mock (lower — noisier)
-  Plotly.newPlot("plot-rna-concordance-bar",[
-    {name:"TRBV",x:trbvConc,y:dsNames,type:"bar",orientation:"h",
-     marker:{color:"#2166AC"},text:trbvConc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside"},
-    {name:"TRAV",x:travConc,y:dsNames,type:"bar",orientation:"h",
-     marker:{color:"#EC4899"},text:travConc.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside"}
-  ],{
-    title:{text:"RNA-seq vs TCR-seq Gene Call Concordance by Dataset",font:{size:13}},
-    barmode:"group",xaxis:{title:"Concordance rate",range:[0,1.0],tickformat:".0%"},
-    legend:{orientation:"h",y:-.2},
-    margin:{t:50,b:80,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
-  },cfg);
-})();
-
-
-// ── Resolution ladder ─────────────────────────────────────────────────────────
-(function(){
-  const labels=SEGMENTS.map(s=>s.label);
-  const meanRhos=SEGMENTS.map(s=>{
-    const vals=DS_KEYS.map(k=>MOCK[k].segs[s.label]||0);
-    return vals.reduce((a,b)=>a+b,0)/vals.length;
+  // Per-dataset segment bars
+  ["lechner","luoma","blum_pbmc"].forEach(ds => {
+    const k = {lechner:"le",luoma:"lu",blum_pbmc:"bp"}[ds];
+    const rows = D.segment_correlations.filter(r=>r.dataset===ds && r.spearman_rho!=="NA");
+    rows.sort((a,b)=>num(b.spearman_rho)-num(a.spearman_rho));
+    const el = document.getElementById(`plot-seg-${k}`);
+    if(!el||!rows.length) return;
+    Plotly.newPlot(el,[{
+      x:rows.map(r=>num(r.spearman_rho)), y:rows.map(r=>r.metric),
+      type:"bar",orientation:"h",
+      marker:{color:rows.map(r=>SEG_COLORS[r.metric]||"grey")},
+      text:rows.map(r=>`ρ = ${parseFloat(r.spearman_rho).toFixed(2)}`),textposition:"outside",
+      hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
+    }],{
+      title:{text:`Segment Correlations — ${DS_LABELS[ds]}`,font:{size:13}},
+      xaxis:{title:"Spearman ρ",range:[0,1.1]},yaxis:{autorange:"reversed"},
+      margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
   });
-  Plotly.newPlot("plot-resolution",[{
-    x:meanRhos,y:labels,type:"scatter",mode:"markers+lines",
-    marker:{color:SEGMENTS.map(s=>s.color),size:14,symbol:"circle"},
-    line:{color:"#94a3b8",width:2},
-    text:meanRhos.map(r=>`ρ = ${r.toFixed(2)}`),
-    textposition:"middle right",hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
-  }],{
-    title:{text:"TCR Segment Resolution Ladder (weakest → strongest proxy)",font:{size:13}},
-    xaxis:{title:"Mean Spearman ρ with H_clonotype",range:[0,1.05]},
-    yaxis:{},margin:{t:50,b:50,l:110},
-    plot_bgcolor:"#fafafa",paper_bgcolor:"white",
-    shapes:[{type:"line",x0:.5,x1:.5,y0:-.5,y1:labels.length-.5,
-             line:{color:"#f59e0b",width:1.5,dash:"dash"},opacity:.5}],
-    annotations:[{x:.5,y:labels.length-.3,text:"ρ = 0.5 threshold",
-                  showarrow:false,font:{size:11,color:"#92400e"}}]
-  },cfg);
-})();
+
+  // ── 5. H_TRBV vs H_clonotype scatters ────────────────────────────────────
+  const divW = D.diversity_whole;
+
+  if(document.getElementById("plot-sc-all"))
+    scatterPlot(divW,"plot-sc-all","H<sub>TRBV</sub> vs H<sub>clonotype</sub> — All Datasets");
+
+  ["lechner","luoma","blum_pbmc"].forEach(ds => {
+    const k={lechner:"le",luoma:"lu",blum_pbmc:"bp"}[ds];
+    const rows=divW.filter(r=>r.dataset===ds);
+    if(rows.length && document.getElementById(`plot-sc-${k}`)) {
+      const xs=rows.map(r=>num(r.H_TRBV)),ys=rows.map(r=>num(r.H_clonotype));
+      const mn=Math.min(...xs,...ys)*.9,mx=Math.max(...xs,...ys)*1.05;
+      const rho=xs.length>=3?spearman(xs,ys):null;
+      Plotly.newPlot(`plot-sc-${k}`,[
+        {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false},
+        {x:xs,y:ys,mode:"markers+text",text:rows.map(r=>r.sample_id),
+         textposition:"top center",textfont:{size:8},
+         marker:{color:DS_COLORS[ds],size:10,opacity:.85},type:"scatter",name:"Sample"}
+      ],{
+        title:{text:`H<sub>TRBV</sub> vs H<sub>clonotype</sub> — ${DS_LABELS[ds]}${rho!==null?`<br><sub>Spearman ρ = ${rho.toFixed(3)}</sub>`:""}`,font:{size:13}},
+        xaxis:{title:"H<sub>TRBV</sub> (proxy)",range:[mn,mx]},
+        yaxis:{title:"H<sub>clonotype</sub> (true)",range:[mn,mx]},
+        margin:{t:65,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+      },cfg);
+    }
+  });
+
+  // ── 6. Clonality scatter ─────────────────────────────────────────────────
+  if(document.getElementById("plot-cn-all"))
+    scatterPlot(divW,"plot-cn-all","TRBV Clonality Proxy vs True Clonality","TRBV_clonality_proxy","true_clonality");
+
+  ["lechner","luoma","blum_pbmc"].forEach(ds=>{
+    const k={lechner:"le",luoma:"lu",blum_pbmc:"bp"}[ds];
+    const rows=divW.filter(r=>r.dataset===ds&&num(r.TRBV_clonality_proxy)!==null&&num(r.true_clonality)!==null);
+    if(!rows.length||!document.getElementById(`plot-cn-${k}`)) return;
+    Plotly.newPlot(`plot-cn-${k}`,[
+      {x:[0,1],y:[0,1],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false},
+      {x:rows.map(r=>num(r.TRBV_clonality_proxy)),y:rows.map(r=>num(r.true_clonality)),
+       mode:"markers+text",text:rows.map(r=>r.sample_id),
+       textposition:"top center",textfont:{size:8},
+       marker:{color:DS_COLORS[ds],size:10,opacity:.85},type:"scatter"}
+    ],{
+      title:{text:`Clonality Proxy vs True — ${DS_LABELS[ds]}`,font:{size:13}},
+      xaxis:{title:"TRBV clonality proxy",range:[0,1]},
+      yaxis:{title:"True clonality",range:[0,1]},
+      margin:{t:50,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  });
+
+  // All-datasets clonality
+  if(document.getElementById("plot-cn-all")) {
+    const dsArr=["lechner","luoma","blum_pbmc"];
+    const traces=dsArr.map(ds=>{
+      const rows=divW.filter(r=>r.dataset===ds&&num(r.TRBV_clonality_proxy)!==null);
+      return {x:rows.map(r=>num(r.TRBV_clonality_proxy)),y:rows.map(r=>num(r.true_clonality)),
+        mode:"markers+text",text:rows.map(r=>r.sample_id),textposition:"top center",textfont:{size:8},
+        marker:{color:DS_COLORS[ds],size:9,opacity:.8},name:DS_LABELS[ds],type:"scatter"};
+    });
+    traces.unshift({x:[0,1],y:[0,1],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false});
+    Plotly.newPlot("plot-cn-all",traces,{
+      title:{text:"Clonality Proxy vs True Clonality — All Datasets",font:{size:13}},
+      xaxis:{title:"TRBV clonality proxy",range:[0,1]},
+      yaxis:{title:"True clonality",range:[0,1]},
+      legend:{orientation:"h",y:-.15},margin:{t:60,b:80},
+      plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  }
+
+  // ── 7. Bland-Altman ──────────────────────────────────────────────────────
+  ["lechner","luoma","blum_pbmc"].forEach(ds=>{
+    const k={lechner:"le",luoma:"lu",blum_pbmc:"bp"}[ds];
+    if(document.getElementById(`plot-ba-${k}`))
+      blandAltman(divW,`plot-ba-${k}`,ds,`Bland-Altman — ${DS_LABELS[ds]}`);
+  });
+
+  // ── 8. CD4/CD8/DP/DN subset scatter ──────────────────────────────────────
+  const divS = D.diversity_subset;
+  if(divS.length && document.getElementById("plot-sub-all")) {
+    const dsArr=["lechner","luoma","blum_pbmc"];
+    const subsets=[...new Set(divS.map(r=>r.subset))];
+    const traces=[];
+    dsArr.forEach((ds,i)=>{
+      subsets.forEach(ss=>{
+        const pts=divS.filter(r=>r.dataset===ds&&r.subset===ss&&num(r.H_TRBV)!==null);
+        if(!pts.length) return;
+        traces.push({
+          x:pts.map(r=>num(r.H_TRBV)),y:pts.map(r=>num(r.H_clonotype)),
+          mode:"markers+text",text:pts.map(r=>r.sample_id+" "+ss),
+          textposition:"top center",textfont:{size:7},
+          marker:{color:SUBSET_COLORS[ss]||"grey",size:9,opacity:.8,
+                  symbol:["circle","square","diamond"][i]},
+          name:`${DS_LABELS[ds]} ${ss}`,legendgroup:ss,type:"scatter"
+        });
+      });
+    });
+    const allX=traces.flatMap(t=>t.x),allY=traces.flatMap(t=>t.y);
+    const mn=Math.min(...allX,...allY)*.9,mx=Math.max(...allX,...allY)*1.05;
+    traces.unshift({x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false,hoverinfo:"none"});
+    Plotly.newPlot("plot-sub-all",traces,{
+      title:{text:"H<sub>TRBV</sub> vs H<sub>clonotype</sub> by T Cell Subset — All Datasets",font:{size:13}},
+      xaxis:{title:"H<sub>TRBV</sub>",range:[mn,mx]},
+      yaxis:{title:"H<sub>clonotype</sub>",range:[mn,mx]},
+      legend:{orientation:"v",groupclick:"toggleitem",font:{size:9}},
+      margin:{t:60,b:60},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  }
+
+  // Per-dataset subset plots
+  ["lechner","luoma","blum_pbmc"].forEach(ds=>{
+    const k={lechner:"le",luoma:"lu",blum_pbmc:"bp"}[ds];
+    ["cd8","cd4"].forEach(ss=>{
+      const elId=`plot-sub-${k}-${ss}`;
+      if(!document.getElementById(elId)) return;
+      const pts=divS.filter(r=>r.dataset===ds&&r.subset===ss.toUpperCase()&&num(r.H_TRBV)!==null);
+      if(!pts.length){
+        Plotly.newPlot(elId,[],{title:{text:`No ${ss.toUpperCase()} data`,font:{size:12}},
+          plot_bgcolor:"#fafafa",paper_bgcolor:"white"},cfg);
+        return;
+      }
+      const xs=pts.map(r=>num(r.H_TRBV)),ys=pts.map(r=>num(r.H_clonotype));
+      const mn=Math.min(...xs,...ys)*.9,mx=Math.max(...xs,...ys)*1.05;
+      const rho=xs.length>=3?spearman(xs,ys):null;
+      Plotly.newPlot(elId,[
+        {x:[mn,mx],y:[mn,mx],mode:"lines",line:{color:"red",width:1.5,dash:"dot"},showlegend:false},
+        {x:xs,y:ys,mode:"markers+text",text:pts.map(r=>r.sample_id),
+         textposition:"top center",textfont:{size:8},
+         marker:{color:SUBSET_COLORS[ss.toUpperCase()],size:10,opacity:.85},type:"scatter"}
+      ],{
+        title:{text:`${ss.toUpperCase()} — ${DS_LABELS[ds]}${rho!==null?`<br><sub>ρ = ${rho.toFixed(3)}</sub>`:""}`,font:{size:12}},
+        xaxis:{title:"H<sub>TRBV</sub>",range:[mn,mx]},
+        yaxis:{title:"H<sub>clonotype</sub>",range:[mn,mx]},
+        margin:{t:60,b:50},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+      },cfg);
+    });
+  });
+
+  // Subset rho bar (from real correlation_subset)
+  if(document.getElementById("plot-sub-rho") && D.correlation_subset.length) {
+    const subsets=[...new Set(D.correlation_subset.map(r=>r.subset))];
+    const meanRhoSub=subsets.map(ss=>{
+      const vals=D.correlation_subset.filter(r=>r.subset===ss&&r.spearman_rho!=="NA").map(r=>num(r.spearman_rho)).filter(v=>v!==null);
+      return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+    });
+    const valid=subsets.filter((_,i)=>meanRhoSub[i]!==null);
+    const validRhos=meanRhoSub.filter(v=>v!==null);
+    Plotly.newPlot("plot-sub-rho",[{
+      x:validRhos,y:valid,type:"bar",orientation:"h",
+      marker:{color:valid.map(s=>SUBSET_COLORS[s]||"grey")},
+      text:validRhos.map(r=>`ρ = ${r.toFixed(2)}`),textposition:"outside",
+      hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
+    }],{
+      title:{text:"Mean Spearman ρ by T Cell Subset (across datasets)",font:{size:13}},
+      xaxis:{title:"Mean Spearman ρ",range:[0,1.1]},yaxis:{},
+      margin:{t:50,b:50,l:70},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  }
+
+  // ── 9. Pseudoclonotype summary ────────────────────────────────────────────
+  const psSum = D.pseudo_summary;
+  const segOrderPs=["TRBV","TRBJ","VJ_beta","TRAV","VJ_alpha","VA_VB","Full_paired"];
+
+  // Mean across datasets per level
+  const psMean={};
+  psSum.forEach(r=>{
+    if(!psMean[r.pseudo_level]) psMean[r.pseudo_level]={purity:[],collision:[],split:[],coverage:[]};
+    if(r.mean_purity!=="NA")    psMean[r.pseudo_level].purity.push(num(r.mean_purity));
+    if(r.mean_collision!=="NA") psMean[r.pseudo_level].collision.push(num(r.mean_collision));
+    if(r.mean_split!=="NA")     psMean[r.pseudo_level].split.push(num(r.mean_split));
+    if(r.mean_coverage!=="NA")  psMean[r.pseudo_level].coverage.push(num(r.mean_coverage));
+  });
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:null;
+  const psLevels=segOrderPs.filter(l=>psMean[l]);
+
+  // Populate table
+  const psBody=document.getElementById("pseudo-tbody");
+  if(psBody) {
+    psBody.innerHTML="";
+    const resDescs={TRBV:"V-beta only",TRBJ:"J-beta only",VJ_beta:"Vβ:Jβ combo",
+      TRAV:"V-alpha only",VJ_alpha:"Vα:Jα combo",VA_VB:"Vα:Vβ paired",Full_paired:"Vα:Jα:Vβ:Jβ (full)"};
+    psLevels.forEach(l=>{
+      const p=avg(psMean[l].purity), co=avg(psMean[l].collision), sp=avg(psMean[l].split), cv=avg(psMean[l].coverage);
+      const cls=p>=.8?"rho-high":p>=.6?"rho-med":"rho-low";
+      psBody.innerHTML+=`<tr>
+        <td><strong>${l}</strong></td>
+        <td style="color:var(--muted);font-size:12px">${resDescs[l]||""}</td>
+        <td><span class="rho-badge ${cls}">${p!==null?(p*100).toFixed(0)+"%":"—"}</span></td>
+        <td>${co!==null?(co*100).toFixed(0)+"%":"—"}</td>
+        <td>${sp!==null?(sp*100).toFixed(0)+"%":"—"}</td>
+        <td>${cv!==null?(cv*100).toFixed(0)+"%":"—"}</td>
+        <td>—</td>
+      </tr>`;
+    });
+  }
+
+  if(document.getElementById("plot-ps-summary") && psLevels.length) {
+    const purities=psLevels.map(l=>avg(psMean[l].purity));
+    Plotly.newPlot("plot-ps-summary",[{
+      x:purities,y:psLevels,type:"bar",orientation:"h",
+      marker:{color:psLevels.map(l=>SEG_COLORS[l]||"grey")},
+      text:purities.map(v=>`${(v*100).toFixed(0)}%`),textposition:"outside",
+      hovertemplate:"%{y}: purity %{text}<extra></extra>"
+    }],{
+      title:{text:"Mean Pseudoclonotype Purity by Combo Level (across datasets)",font:{size:13}},
+      xaxis:{title:"Mean weighted purity",range:[0,1.1],tickformat:".0%"},yaxis:{autorange:"reversed"},
+      margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+
+    // Collision & split
+    Plotly.newPlot("plot-ps-purity",[
+      {x:psLevels.map(l=>avg(psMean[l].collision)),y:psLevels,type:"bar",orientation:"h",
+       name:"Collision rate",marker:{color:"#f87171"},
+       text:psLevels.map(l=>`${(avg(psMean[l].collision)*100).toFixed(0)}%`),textposition:"outside"},
+      {x:psLevels.map(l=>avg(psMean[l].split)),y:psLevels,type:"bar",orientation:"h",
+       name:"Split rate",marker:{color:"#fb923c"},
+       text:psLevels.map(l=>`${(avg(psMean[l].split)*100).toFixed(0)}%`),textposition:"outside"}
+    ],{
+      title:{text:"Collision & Split Rate by Combo Level",font:{size:13}},
+      barmode:"group",xaxis:{title:"Rate",range:[0,1.1],tickformat:".0%"},yaxis:{autorange:"reversed"},
+      legend:{orientation:"h",y:-.15},margin:{t:50,b:80,l:110},
+      plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  }
+
+  // ── 10. Correlation summary bar ───────────────────────────────────────────
+  if(document.getElementById("plot-rho-bar") && D.correlation_whole.length) {
+    const corrRows=D.correlation_whole.filter(r=>r.spearman_rho!=="NA");
+    const dsArr=corrRows.map(r=>r.dataset);
+    const rhos=corrRows.map(r=>num(r.spearman_rho));
+    const sig=corrRows.map(r=>num(r.spearman_p)<.05);
+    Plotly.newPlot("plot-rho-bar",[{
+      x:rhos,y:dsArr.map(d=>DS_LABELS[d]||d),type:"bar",orientation:"h",
+      marker:{color:dsArr.map(d=>DS_COLORS[d]||"grey")},
+      text:rhos.map((r,i)=>`ρ = ${r.toFixed(2)}${sig[i]?"*":""}`),textposition:"outside",
+      hovertemplate:"%{y}: ρ = %{x:.3f}<extra></extra>"
+    }],{
+      title:{text:"H<sub>TRBV</sub> vs H<sub>clonotype</sub> — Spearman ρ<br><sub>* p &lt; 0.05</sub>",font:{size:13}},
+      xaxis:{title:"Spearman ρ",range:[0,1.15]},yaxis:{},
+      margin:{t:60,b:50,l:140},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  }
+
+  // ── 11. Correlation table ─────────────────────────────────────────────────
+  const corrTbody=document.getElementById("corr-tbody");
+  if(corrTbody) {
+    corrTbody.innerHTML="";
+    D.correlation_whole.forEach(r=>{
+      const rho=num(r.spearman_rho), sig=num(r.spearman_p)<.05;
+      const cls=rho===null?"":rho>=.8?"rho-high":rho>=.6?"rho-med":"rho-low";
+      corrTbody.innerHTML+=`<tr>
+        <td style="font-weight:600">${DS_LABELS[r.dataset]||r.dataset}</td>
+        <td>${rho!==null?`<span class="rho-badge ${cls}">${rho.toFixed(3)}${sig?"*":""}</span>`:"—"}</td>
+        <td style="color:var(--muted);font-size:12px">${r.spearman_p!=="NA"?parseFloat(r.spearman_p).toFixed(4):"—"}</td>
+        <td>${r.pearson_r!=="NA"?parseFloat(r.pearson_r).toFixed(3):"—"}</td>
+        <td>${r.rho_clonality!=="NA"?parseFloat(r.rho_clonality).toFixed(3):"—"}</td>
+        <td>${r.n_groups}</td>
+      </tr>`;
+    });
+  }
+
+  // ── 12. Rank abundance ────────────────────────────────────────────────────
+  ["lechner","luoma","blum_pbmc"].forEach(ds=>{
+    const k={lechner:"le",luoma:"lu",blum_pbmc:"bp"}[ds];
+    if(document.getElementById(`plot-rank-${k}`))
+      rankAbundancePlot(D.rank_abundance,`plot-rank-${k}`,ds,`Clonotype Rank-Abundance — ${DS_LABELS[ds]}`);
+  });
+
+  // ── 13. Resolution ladder ─────────────────────────────────────────────────
+  if(document.getElementById("plot-resolution") && psLevels.length) {
+    const purities=psLevels.map(l=>avg(psMean[l].purity));
+    Plotly.newPlot("plot-resolution",[{
+      x:purities,y:psLevels,type:"scatter",mode:"markers+lines",
+      marker:{color:psLevels.map(l=>SEG_COLORS[l]||"grey"),size:14},
+      line:{color:"#94a3b8",width:2},
+      text:purities.map(v=>`Purity = ${(v*100).toFixed(0)}%`),
+      textposition:"middle right",
+      hovertemplate:"%{y}: purity = %{text}<extra></extra>"
+    }],{
+      title:{text:"Pseudoclonotype Resolution Ladder (weakest → strongest)",font:{size:13}},
+      xaxis:{title:"Mean purity",range:[0,1.1],tickformat:".0%"},yaxis:{},
+      margin:{t:50,b:50,l:110},plot_bgcolor:"#fafafa",paper_bgcolor:"white"
+    },cfg);
+  }
+
+}).catch(err => {
+  // Fetch failed — likely opened as file:// without a local server
+  const msg = `
+    <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:20px 24px;margin:24px;font-size:14px">
+      <strong>⚠ Could not load data files</strong><br><br>
+      This usually happens when the page is opened directly as a <code>file://</code> URL
+      (browsers block local fetches for security).<br><br>
+      <strong>To view real data, serve locally:</strong><br>
+      <code style="display:block;margin:8px 0;background:#1e293b;color:#e2e8f0;padding:10px;border-radius:4px">
+        cd /path/to/echo/analysis/validation<br>
+        python3 -m http.server 8080
+      </code>
+      Then open <a href="http://localhost:8080" style="color:#2563eb">http://localhost:8080</a> in your browser.<br><br>
+      <em>Error: ${err.message}</em>
+    </div>`;
+  document.querySelector("main").insertAdjacentHTML("afterbegin", msg);
+  console.error("CSV load error:", err);
+});
 </script>
 </body>
 </html>

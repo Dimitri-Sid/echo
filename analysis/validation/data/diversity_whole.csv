@@ -1,0 +1,2 @@
+"sample_id","n_cells_trbv","n_trbv_detected","H_TRBV","H_norm_TRBV","TRBV_clonality_proxy","n_clonotypes","H_clonotype","H_norm_clonotype","true_clonality","top_clone_fraction","dataset"
+"lechner-GSE218743-thyroiditis",1918,45,3.4369,0.9029,0.0971,1474,5.4829,0.7515,0.2485,0.2983,"lechner"

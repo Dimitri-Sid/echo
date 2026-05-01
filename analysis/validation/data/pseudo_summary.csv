@@ -1,0 +1,8 @@
+"pseudo_level","n_groups","mean_purity","sd_purity","mean_collision","mean_split","mean_coverage","mean_n_pseudo","mean_n_real","dataset"
+"TRBV",1,0.166,NA,0.978,0.001,0.689,45,1440,"lechner"
+"TRBJ",1,0.1,NA,1,0.001,0.689,13,1440,"lechner"
+"VJ_beta",1,0.4,NA,0.723,0.001,0.689,361,1440,"lechner"
+"TRAV",1,0.195,NA,0.977,0.011,0.578,43,1132,"lechner"
+"VJ_alpha",1,0.748,NA,0.337,0.011,0.578,763,1132,"lechner"
+"VA_VB",1,0.69,NA,0.39,0.013,0.565,648,1099,"lechner"
+"Full_paired",1,0.991,NA,0.013,0.013,0.565,1099,1099,"lechner"

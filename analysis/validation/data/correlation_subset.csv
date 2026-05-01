@@ -1,0 +1,4 @@
+"dataset","subset","spearman_rho","spearman_p","n_groups"
+"luoma","CD8",0.723,0.0035,14
+"blum_pbmc","CD4",0.901,0,55
+"blum_pbmc","CD8",0.888,0,55

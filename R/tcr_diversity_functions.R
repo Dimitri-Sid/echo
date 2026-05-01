@@ -2555,7 +2555,6 @@ plot_gene_usage_heatmap <- function(metadata,
   )
   invisible(NULL)
 }
-}
 
 
 # =============================================================================
